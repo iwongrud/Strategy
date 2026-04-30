@@ -1,0 +1,901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Corporate Intelligence Knowledge Graph</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=DM+Sans:wght@300;400;500;600&display=swap');
+:root{
+  --bg:#0b0f14;--surface:#131920;--surface2:#1a2230;--border:#243044;--border-l:#2e3d52;
+  --tp:#dce8f5;--ts:#7a90a8;--tm:#3d5068;
+  --cr:#c9a84c;--ci:#7c6df5;--cil:#b3abff;--cf:#3a9fd6;--cfl:#93d4f5;--cb:#3dbf8f;--cbl:#92e8cc;
+  --pw:320px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;overflow:hidden}
+body{background:var(--bg);color:var(--tp);font-family:'DM Sans',sans-serif;font-weight:300;display:flex;flex-direction:column}
+
+header{display:flex;align-items:center;justify-content:space-between;padding:10px 20px;border-bottom:1px solid var(--border);background:var(--surface);flex-shrink:0;z-index:20}
+.ht{font-family:'Playfair Display',serif;font-size:15px;font-weight:600;letter-spacing:.03em}
+.hs{font-size:9px;color:var(--ts);letter-spacing:.09em;text-transform:uppercase;margin-top:1px}
+.hb{font-size:9px;color:var(--cr);border:1px solid var(--cr);padding:3px 9px;letter-spacing:.1em;text-transform:uppercase}
+
+.fbar{display:flex;align-items:center;gap:4px;padding:6px 20px;background:var(--surface);border-bottom:1px solid var(--border);flex-shrink:0;flex-wrap:wrap}
+.fl{font-size:9px;color:var(--tm);text-transform:uppercase;letter-spacing:.1em;margin-right:3px;flex-shrink:0}
+.fb{background:transparent;border:1px solid var(--border);color:var(--ts);padding:3px 10px;font-family:'DM Sans',sans-serif;font-size:10px;cursor:pointer;border-radius:2px;transition:all .15s;white-space:nowrap}
+.fb:hover{border-color:var(--cr);color:var(--cr)}
+.fb.active{background:var(--cr);border-color:var(--cr);color:#0b0f14;font-weight:500}
+.fb.all.active{background:var(--tp);border-color:var(--tp);color:#0b0f14}
+.fdv{width:1px;height:14px;background:var(--border);margin:0 2px}
+
+.main{display:flex;flex:1;overflow:hidden;position:relative}
+
+.sp{width:0;background:var(--surface);border-right:1px solid var(--border);transition:width .3s cubic-bezier(.4,0,.2,1);overflow:hidden;flex-shrink:0;z-index:15;position:relative}
+.sp.open{width:var(--pw)}
+.spi{width:var(--pw);height:100%;overflow-y:auto;padding:18px 16px 26px;scrollbar-width:thin;scrollbar-color:var(--border) transparent}
+.spi::-webkit-scrollbar{width:3px}
+.spi::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.spc{position:absolute;top:10px;right:10px;background:transparent;border:1px solid var(--border);color:var(--ts);width:20px;height:20px;cursor:pointer;font-size:11px;display:flex;align-items:center;justify-content:center;border-radius:2px;transition:all .15s}
+.spc:hover{border-color:var(--tp);color:var(--tp)}
+.stag{font-size:8px;text-transform:uppercase;letter-spacing:.12em;color:var(--tm);margin-bottom:6px}
+.sbar{width:26px;height:3px;border-radius:2px;margin-bottom:11px}
+.stit{font-family:'Playfair Display',serif;font-size:17px;font-weight:600;line-height:1.3;margin-bottom:4px}
+.ssub{font-size:11px;color:var(--ts);line-height:1.75;margin-bottom:14px}
+.sdiv{border:none;border-top:1px solid var(--border);margin:10px 0 8px}
+.slbl{font-size:8px;text-transform:uppercase;letter-spacing:.12em;color:var(--tm);margin-bottom:6px}
+.snl{display:flex;flex-direction:column;gap:2px}
+.sni{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--ts);padding:2px 0}
+.sdt{width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.spl{display:flex;flex-direction:column;gap:4px;margin-top:2px}
+.spv{background:var(--surface2);border:1px solid var(--border);border-radius:3px;padding:6px 9px}
+.spn{font-weight:500;font-size:11px;margin-bottom:1px;color:var(--tp)}
+.spd{font-size:9px;color:var(--ts)}
+.sem{font-size:10px;color:var(--tm);font-style:italic}
+
+#gc{flex:1;position:relative;overflow:hidden}
+svg{width:100%;height:100%}
+.lkt0{stroke-width:2.2;fill:none;stroke-opacity:.55}
+.lkt1{stroke-width:1.5;fill:none;stroke-opacity:.38}
+.lkt2{stroke-width:.9;fill:none;stroke-opacity:.25}
+.lk.fd{opacity:.04!important}
+.nd circle{cursor:pointer;transition:filter .15s}
+.nd text{pointer-events:none;font-family:'DM Sans',sans-serif}
+.nd.fd{opacity:.06}
+.nd.fd text{opacity:0}
+.nd circle:hover{filter:brightness(1.45) drop-shadow(0 0 5px currentColor)}
+
+#tt{position:fixed;pointer-events:none;opacity:0;transition:opacity .1s;z-index:200;background:var(--surface2);border:1px solid var(--border-l);border-radius:4px;padding:9px 12px;max-width:260px;font-size:11px;line-height:1.65}
+#tt.vis{opacity:1}
+.ttn{font-weight:500;font-size:12px;color:var(--tp);margin-bottom:4px;border-bottom:1px solid var(--border);padding-bottom:4px}
+.ttr{display:flex;gap:5px;align-items:flex-start;margin-top:3px;font-size:10px}
+.tta{flex-shrink:0;margin-top:1px}
+
+.leg{position:absolute;bottom:14px;right:14px;background:var(--surface);border:1px solid var(--border);padding:9px 12px;border-radius:3px;z-index:10}
+.legt{font-size:8px;text-transform:uppercase;letter-spacing:.1em;color:var(--tm);margin-bottom:5px}
+.legi{display:flex;align-items:center;gap:6px;font-size:10px;color:var(--ts);margin-bottom:3px}
+.legd{width:7px;height:7px;border-radius:50%;flex-shrink:0}
+
+.zb{position:absolute;bottom:14px;left:14px;display:flex;flex-direction:column;gap:2px;z-index:10}
+.zbt{background:var(--surface);border:1px solid var(--border);color:var(--ts);width:24px;height:24px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;border-radius:2px;transition:all .15s}
+.zbt:hover{border-color:var(--cr);color:var(--cr)}
+
+.stb{padding:4px 20px;border-top:1px solid var(--border);background:var(--surface);font-size:9px;color:var(--tm);flex-shrink:0;display:flex;justify-content:space-between;letter-spacing:.04em}
+</style>
+</head>
+<body>
+<header>
+  <div><div class="ht">Corporate Intelligence Knowledge Graph</div><div class="hs">Data Relationships &amp; Use Case Navigator</div></div>
+  <div class="hb">Mockup v0.4</div>
+</header>
+<div class="fbar">
+  <span class="fl">Use Cases</span>
+  <button class="fb all active" data-filter="all">All Nodes</button>
+  <div class="fdv"></div>
+  <button class="fb" data-filter="credit">Credit Risk</button>
+  <button class="fb" data-filter="ma">M&amp;A Diligence</button>
+  <button class="fb" data-filter="peer">Peer Benchmarking</button>
+  <button class="fb" data-filter="kyc">KYC / AML</button>
+  <button class="fb" data-filter="fraud">Fraud</button>
+  <button class="fb" data-filter="supply">Supply Chain</button>
+  <button class="fb" data-filter="lending">Lending</button>
+  <button class="fb" data-filter="insurance">P&amp;C Insurance</button>
+  <button class="fb" data-filter="sales">Sales &amp; Marketing</button>
+  <button class="fb" data-filter="cre">Comm. Real Estate</button>
+  <button class="fb" data-filter="climate">Climate Risk</button>
+  <button class="fb" data-filter="counterparty">Counterparty Risk</button>
+</div>
+<div class="main">
+  <div class="sp" id="sp">
+    <div class="spi" id="spi">
+      <button class="spc" id="spc">✕</button>
+      <div class="stag" id="stag">Detail</div>
+      <div class="sbar" id="sbar"></div>
+      <div class="stit" id="stit">—</div>
+      <div class="ssub" id="ssub"></div>
+      <hr class="sdiv">
+      <div class="slbl" id="slbl1">Relationships</div>
+      <div id="snl" class="snl"></div>
+      <hr class="sdiv">
+      <div class="slbl" id="slbl2">Data Providers</div>
+      <div id="spl" class="spl"></div>
+    </div>
+  </div>
+  <div id="gc">
+    <svg id="graph"></svg>
+    <div class="leg">
+      <div class="legt">Categories</div>
+      <div class="legi"><div class="legd" style="background:var(--cr)"></div>Company</div>
+      <div class="legi"><div class="legd" style="background:var(--ci)"></div>Corporate Identity &amp; Structure</div>
+      <div class="legi"><div class="legd" style="background:var(--cf)"></div>Financials</div>
+      <div class="legi"><div class="legd" style="background:var(--cb)"></div>Business Profile &amp; Operations</div>
+    </div>
+    <div class="zb">
+      <button class="zbt" id="zIn">+</button>
+      <button class="zbt" id="zOut">−</button>
+      <button class="zbt" id="zReset">⊙</button>
+    </div>
+  </div>
+</div>
+<div id="tt">
+  <div class="ttn" id="ttn"></div>
+  <div class="ttr" id="tri" style="display:none"><span class="tta" style="color:var(--ts)">←</span><span id="ttin" style="color:var(--ts)"></span></div>
+  <div class="ttr" id="tro" style="display:none"><span class="tta" style="color:var(--cr)">→</span><span id="ttout" style="color:var(--ts)"></span></div>
+</div>
+<div class="stb"><span id="stl">Showing all nodes · Hover to explore · Click for detail</span><span id="str">— nodes</span></div>
+
+<script>
+// ─── COLORS ──────────────────────────────────────────────────────────────────
+const C={root:"#c9a84c",identity:"#7c6df5",financial:"#3a9fd6",biz:"#3dbf8f",il:"#b3abff",fl:"#93d4f5",bl:"#92e8cc"};
+function cc(n){
+  if(n.tier===0) return C.root;
+  if(n.cat==="identity")  return n.tier===1?C.identity:C.il;
+  if(n.cat==="financial") return n.tier===1?C.financial:C.fl;
+  return n.tier===1?C.biz:C.bl;
+}
+function nr(n){ return n.tier===0?25:n.tier===1?17:n.tier===2?11:10; }
+
+// ─── NODES ───────────────────────────────────────────────────────────────────
+const NODES=[
+// T0
+{id:"company",label:"Company",tier:0,cat:"root",
+ i:"Root entity — no upstream inputs",
+ o:"Anchors Corporate Identity & Structure, Financials, and Business Profile & Operations",
+ desc:"The central corporate entity. All data domains radiate from this node.",pvs:[]},
+
+// T1
+{id:"corp-id",label:"Corporate Identity\n& Structure",tier:1,cat:"identity",
+ i:"Receives foundational entity data from company registration and legal filings",
+ o:"Branches into Legal Entity, Ownership/UBO, Sanctions, PEP/SOE, Management, and Litigation nodes",
+ desc:"Covers the legal, ownership, and governance structure — who owns the entity, how it is governed, and its regulatory standing.",
+ pvs:[{n:"Dun & Bradstreet",d:"Entity verification, corporate hierarchy, DUNS registry"},{n:"Bureau van Dijk (Moody's)",d:"Ownership, UBO data, subsidiary mapping"},{n:"LexisNexis",d:"Corporate filings, registered agents, state records"}]},
+
+{id:"fin",label:"Financials",tier:1,cat:"financial",
+ i:"Receives financial reports and regulatory filings from the Company",
+ o:"Feeds Financial Statements, Bonds & Instruments, and all derived financial metrics",
+ desc:"All financial data inputs and derived metrics. Source for credit, lending, M&A, and insurance underwriting.",
+ pvs:[{n:"S&P Global Market Intelligence",d:"Financial statements, KPIs, segment data"},{n:"FactSet",d:"Normalized financials, estimates, capital structure"},{n:"Bloomberg",d:"Real-time and historical financial data, debt instruments"}]},
+
+{id:"biz",label:"Business Profile\n& Operations",tier:1,cat:"biz",
+ i:"Receives operational disclosures and third-party intelligence about the Company",
+ o:"Feeds all operational data nodes: Cyber, ESG, CRE, Customer, Vendor, Transactions, Adverse Media, Climate, Claims, Economic, Sales, and Product data",
+ desc:"Operational and market intelligence covering cyber, ESG, real estate, customers, vendors, and other non-financial risk dimensions.",
+ pvs:[{n:"Dun & Bradstreet",d:"Business activity, industry classification, location data"},{n:"Refinitiv / LSEG",d:"Industry data, competitor profiles, operational metrics"},{n:"Cortera",d:"Trade payment data, business credit behaviors"}]},
+
+// ─── T2: Identity ─────────────────────────────────────────────────────────────
+{id:"legal-entity",label:"Legal Entity Data",tier:2,cat:"identity",
+ i:"Sourced from corporate registries, state filings, and company formation documents",
+ o:"Legal Entity is the registered foundation that the Ownership / UBO structure is built upon; also feeds KYC/AML Score",
+ desc:"Registered name, entity type (LLC, Corp), jurisdiction, registration date, and current status.",
+ pvs:[{n:"Dun & Bradstreet",d:"DUNS number, entity verification, legal name registry"},{n:"Refinitiv World-Check",d:"Entity resolution, legal identifiers"},{n:"Acuris / Mergermarket",d:"Corporate registry data, entity history"}]},
+
+{id:"ownership",label:"Ownership / UBO",tier:2,cat:"identity",
+ i:"Legal Entity Data establishes the registered entity that is owned or controlled by the Ultimate Beneficial Owner",
+ o:"Ownership / UBO data informs Governance Score and KYC/AML Score — revealing who ultimately controls the entity",
+ desc:"UBO identification, shareholding structures, subsidiary mapping, and parent/child corporate relationships.",
+ pvs:[{n:"Bureau van Dijk (Moody's Orbis)",d:"Global ownership structures, UBO identification, 500M+ entities"},{n:"LexisNexis Bridger",d:"Beneficial ownership, PEP and sanctions linkage"},{n:"Dow Jones Risk & Compliance",d:"Ownership hierarchy, adverse media on owners"}]},
+
+{id:"sanctions",label:"Sanctions &\nWatchlists",tier:2,cat:"identity",
+ i:"Fed by global regulatory bodies (OFAC, EU, UN, HMT) publishing sanctioned entity lists",
+ o:"Sanctions screening feeds KYC/AML Score — a watchlist match is a direct escalation trigger",
+ desc:"Real-time and batch screening against OFAC, EU, UN, HMT, and other global sanctions lists.",
+ pvs:[{n:"Refinitiv World-Check",d:"Global sanctions, PEP, adverse media — 6M+ profiles"},{n:"LexisNexis Bridger Insight",d:"Sanctions, watchlists, enforcement databases"},{n:"Dow Jones Risk & Compliance",d:"Regulatory, sanctions, and PEP intelligence"}]},
+
+{id:"pep-soe",label:"PEP / State-Owned\nEntity Data",tier:2,cat:"identity",
+ i:"Sourced from government disclosures, legislative records, and regulatory filings",
+ o:"PEP / SOE presence feeds KYC/AML Score — triggers enhanced due diligence requirements",
+ desc:"Politically Exposed Persons (PEPs) and State-Owned Enterprise (SOE) identification. Flags heightened corruption and regulatory risk.",
+ pvs:[{n:"Refinitiv World-Check",d:"PEP profiles, SOE registry, family/associate mapping"},{n:"Dow Jones Risk & Compliance",d:"PEP database, SOE ownership flags"},{n:"ComplyAdvantage",d:"Real-time PEP screening, dynamic SOE classification"}]},
+
+{id:"mgmt-info",label:"Management &\nBoard Info",tier:2,cat:"identity",
+ i:"Sourced from company filings, board disclosures, and executive databases",
+ o:"Management & Board profiles feed Governance Score — board quality and executive conduct are core governance inputs",
+ desc:"Names, roles, tenure, compensation, and background of C-suite executives and board members.",
+ pvs:[{n:"BoardEx (LSEG)",d:"Executive and board profiles, relationships, career history"},{n:"ISS Corporate Solutions",d:"Executive compensation, board composition, governance data"},{n:"Equilar",d:"C-suite compensation, board diversity, leadership networks"}]},
+
+{id:"litigation",label:"Litigation &\nLegal Actions",tier:2,cat:"identity",
+ i:"Sourced from court records, regulatory enforcement databases, and public legal filings",
+ o:"Litigation data feeds KYC/AML Score and Operational Risk Score — legal exposure escalates compliance and operational risk",
+ desc:"Pending and historical lawsuits, regulatory fines, enforcement actions, and judgments.",
+ pvs:[{n:"LexisNexis CourtLink",d:"Federal and state court records, litigation history"},{n:"PACER (US Courts)",d:"US federal court filings, dockets, judgments"},{n:"Dun & Bradstreet",d:"Legal actions, liens, judgments data"}]},
+
+// ─── T2: Financials ───────────────────────────────────────────────────────────
+{id:"fin-stmts",label:"Financial\nStatements",tier:2,cat:"financial",
+ i:"Sourced from audited annual and quarterly filings (10-K, 10-Q, IFRS equivalents)",
+ o:"Financial Statements feed Leverage Ratio, Revenue Growth, Cash Flow, Credit Risk Score, and Credit Rating as the raw data source for all financial metrics",
+ desc:"Income statement, balance sheet, and cash flow statement. Normalized across GAAP, IFRS, and local standards.",
+ pvs:[{n:"S&P Global Market Intelligence",d:"Global normalized financials, 150+ years history"},{n:"FactSet",d:"As-reported and normalized financials, restatements"},{n:"Calcbench",d:"XBRL-sourced financials, data quality flags"}]},
+
+{id:"bonds",label:"Bonds &\nInstruments",tier:2,cat:"financial",
+ i:"Sourced from debt issuances, SEC EDGAR filings, and exchange disclosures",
+ o:"Bonds & Instruments data feeds Market Implied Rating — market-observed spreads reveal investor-perceived credit quality",
+ desc:"Debt instrument data covering bond terms, coupon, maturity, covenants, issuance history, and secondary market pricing.",
+ pvs:[{n:"Bloomberg",d:"Bond pricing, spreads, issuance data, covenant details"},{n:"ICE Data Services",d:"Fixed income pricing, reference data, bond analytics"},{n:"Refinitiv / LSEG",d:"Debt capital markets data, instrument terms, credit spreads"}]},
+
+{id:"leverage",label:"Leverage Ratio",tier:2,cat:"financial",
+ i:"Financial Statements provide the debt and earnings figures for Leverage Ratio (Net Debt/EBITDA, Debt/Equity)",
+ o:"Leverage Ratio feeds Credit Risk Score, Credit Rating, and Lending Score — higher leverage increases default probability and loan risk",
+ desc:"Net Debt/EBITDA, Debt/Equity, and Interest Coverage ratios.",
+ pvs:[{n:"S&P Global",d:"Leverage ratios, capital structure decomposition"},{n:"Moody's CreditView",d:"Leverage analysis within credit assessments"},{n:"Bloomberg",d:"Real-time leverage and coverage ratios"}]},
+
+{id:"rev-growth",label:"Revenue Growth",tier:2,cat:"financial",
+ i:"Financial Statements provide historical revenue figures from which growth rates are calculated",
+ o:"Revenue Growth feeds M&A Valuation and Peer Benchmark Score — top-line trajectory drives DCF assumptions and relative positioning",
+ desc:"Year-over-year and CAGR revenue growth, organic vs. acquired breakdowns, and segment-level trends.",
+ pvs:[{n:"S&P Global Market Intelligence",d:"Revenue history, estimates, segment breakdowns"},{n:"FactSet Estimates",d:"Consensus revenue estimates, actuals vs. estimates"},{n:"Visible Alpha",d:"Detailed revenue build-up, granular estimates"}]},
+
+{id:"cashflow",label:"Cash Flow &\nLiquidity",tier:2,cat:"financial",
+ i:"Financial Statements are the source of operating, investing, and financing cash flows",
+ o:"Cash Flow & Liquidity feeds Credit Risk Score, Credit Rating, and Lending Score — free cash flow generation drives debt serviceability",
+ desc:"Free cash flow, operating cash flow, liquidity ratios, and working capital analysis.",
+ pvs:[{n:"Moody's Analytics",d:"Cash flow analytics, debt service coverage"},{n:"S&P Global",d:"FCF generation, liquidity stress testing"},{n:"Refinitiv",d:"Cash flow statements, normalized metrics"}]},
+
+// ─── T2: Business Profile ─────────────────────────────────────────────────────
+{id:"cyber",label:"Cyber Risk",tier:2,cat:"biz",
+ i:"Sourced from external attack surface scans, security rating services, and breach databases",
+ o:"Cyber Risk feeds Insurance Risk Score, Operational Risk Score, and Peer Benchmark Score",
+ desc:"External attack surface analysis, security ratings, breach history, and vulnerability exposure.",
+ pvs:[{n:"BitSight",d:"Security ratings, continuous monitoring, peer comparison"},{n:"SecurityScorecard",d:"10 risk factor ratings, attack surface data"},{n:"RiskRecon (Mastercard)",d:"Third-party risk, vendor cyber exposure"}]},
+
+{id:"esg-data",label:"ESG Data",tier:2,cat:"biz",
+ i:"Sourced from company ESG disclosures, third-party assessments, and regulatory filings",
+ o:"ESG Data feeds Environmental Score, Social Score, and Governance Score — raw disclosures are transformed into pillar scores",
+ desc:"Carbon emissions (Scope 1/2/3), energy use, water consumption, workforce diversity, labor practices, and governance disclosures.",
+ pvs:[{n:"Sustainalytics (Moody's)",d:"ESG risk ratings, controversy monitoring, 40K+ companies"},{n:"MSCI ESG Research",d:"ESG ratings, controversy scores, climate data"},{n:"Refinitiv ESG (LSEG)",d:"450+ ESG metrics, carbon data, scores"}]},
+
+// ─── T3: ESG Pillar Scores (sub-nodes of ESG Data) ───────────────────────────
+{id:"env-score",label:"Environmental\nScore",tier:3,cat:"biz",
+ i:"ESG Data (Scope 1/2/3 emissions, energy use, water, waste) feeds the Environmental Score",
+ o:"Environmental Score feeds ESG Score as the 'E' pillar",
+ desc:"Quantified environmental performance covering carbon footprint, energy efficiency, water stewardship, and waste management.",
+ pvs:[{n:"Sustainalytics (Moody's)",d:"Environmental pillar score, carbon risk rating"},{n:"MSCI ESG",d:"Environmental theme scores, carbon exposure"},{n:"CDP",d:"Climate, water, and forests disclosure scores"}]},
+
+{id:"social-score",label:"Social Score",tier:3,cat:"biz",
+ i:"ESG Data (workforce data, labor practices, community impact, supply chain labor) feeds the Social Score",
+ o:"Social Score feeds ESG Score as the 'S' pillar",
+ desc:"Quantified social performance covering labor practices, workforce diversity, health & safety, community relations, and supply chain standards.",
+ pvs:[{n:"Sustainalytics (Moody's)",d:"Social pillar score, controversy assessments"},{n:"MSCI ESG",d:"Social theme scores, human capital data"},{n:"Refinitiv ESG (LSEG)",d:"Social metrics — workforce, diversity, safety KPIs"}]},
+
+{id:"cre-data",label:"CRE Data",tier:2,cat:"biz",
+ i:"Sourced from property registries, appraisals, lease databases, and market transaction data",
+ o:"CRE Data feeds CRE Score and Insurance Risk Score — property fundamentals and market conditions drive underwriting",
+ desc:"Commercial real estate data covering property characteristics, tenants, financials, and market conditions.",
+ pvs:[{n:"CoStar Group",d:"CRE property data, lease comps, market analytics"},{n:"MSCI Real Assets (IPD)",d:"Property valuations, performance benchmarks"},{n:"Green Street Advisors",d:"CRE market intelligence, REIT analysis"}]},
+
+// CRE sub-nodes
+{id:"cre-parcel",label:"Parcel &\nTitle Data",tier:3,cat:"biz",
+ i:"Sourced from county assessor records, title companies, and public land registries",
+ o:"Parcel & Title Data feeds CRE Score — ownership history and encumbrances affect collateral quality",
+ desc:"Legal descriptions, parcel IDs, ownership history, deed records, easements, liens, and encumbrances.",
+ pvs:[{n:"CoreLogic",d:"Parcel data, ownership records, AVM"},{n:"ATTOM Data",d:"Property records, title history, deed data"},{n:"First American",d:"Title data, ownership chain, encumbrance records"}]},
+
+{id:"cre-sqft",label:"Size, Floor Plans\n& Zoning",tier:3,cat:"biz",
+ i:"Sourced from property surveys, city planning databases, and building permits",
+ o:"Size & Zoning feeds CRE Score — rentable area and permitted use directly determine property income potential",
+ desc:"Gross and net rentable area, floor plans, building class, year built, zoning designation, and permitted land uses.",
+ pvs:[{n:"CoStar Group",d:"Building specs, floor plans, rentable area data"},{n:"REIS (Moody's Analytics)",d:"Market-level square footage, inventory tracking"},{n:"RealPage",d:"Property specifications, unit mix, amenity data"}]},
+
+{id:"cre-tenants",label:"Tenant &\nLease Data",tier:3,cat:"biz",
+ i:"Sourced from lease abstracts, tenant databases, and rent roll filings",
+ o:"Tenant & Lease Data feeds CRE Score — tenant quality and lease terms determine income stability",
+ desc:"Tenant names, industry, creditworthiness, lease terms, expiration schedule, rent per sq ft, and renewal options.",
+ pvs:[{n:"CoStar Group",d:"Lease comps, tenant profiles, market rent data"},{n:"Trepp",d:"CMBS loan data, rent rolls, tenant concentration"},{n:"CompStak",d:"Lease analytics, tenant transaction history"}]},
+
+{id:"cre-noi",label:"NOI / Cap Rate\n& Valuation",tier:3,cat:"biz",
+ i:"Tenant & Lease Data and Size/Zoning together determine Net Operating Income and market valuation",
+ o:"NOI / Cap Rate feeds CRE Score — income yield and capitalization rate are the primary value drivers",
+ desc:"Net Operating Income, cap rate benchmarks, market valuations, DSCR calculations, and LTV ratios.",
+ pvs:[{n:"Green Street Advisors",d:"Cap rate research, sector valuation benchmarks"},{n:"MSCI Real Assets",d:"Property-level NOI, IRR, valuation indices"},{n:"Trepp",d:"CMBS loan performance, DSCR, NOI analysis"}]},
+
+{id:"cre-vacancy",label:"Vacancy &\nOccupancy Rate",tier:3,cat:"biz",
+ i:"Tenant & Lease Data and market supply data determine vacancy and occupancy levels",
+ o:"Vacancy & Occupancy feeds CRE Score — high vacancy reduces income reliability and collateral value",
+ desc:"Current occupancy, vacancy rates by submarket, absorption trends, and leasing velocity.",
+ pvs:[{n:"CoStar Group",d:"Vacancy tracking, market occupancy by submarket"},{n:"CBRE Research",d:"Market vacancy surveys, occupancy benchmarks"},{n:"REIS (Moody's Analytics)",d:"Vacancy forecasts, supply/demand analytics"}]},
+
+// Customer Data
+{id:"cust-data",label:"Customer Data",tier:2,cat:"biz",
+ i:"Sourced from CRM systems, third-party data providers, and public consumer databases",
+ o:"Customer Data feeds Sales & Marketing Score and Fraud Risk Score — customer profiles reveal opportunity and identity anomalies",
+ desc:"Customer concentration, Net Promoter Score, churn rates, customer lifetime value, and demographic profiles.",
+ pvs:[{n:"Dun & Bradstreet",d:"B2B customer data, firmographics, intent data"},{n:"ZoomInfo",d:"Contact data, account intelligence, intent signals"},{n:"Bombora",d:"B2B intent data, topic-level buying signals"}]},
+
+// Vendor & Supply Chain (expanded)
+{id:"vendor-data",label:"Vendor &\nSupply Chain Data",tier:2,cat:"biz",
+ i:"Sourced from procurement systems, supplier databases, and third-party risk platforms",
+ o:"Vendor & Supply Chain Data feeds Supply Chain Risk Score, Operational Risk Score, and Fraud Risk Score",
+ desc:"Multi-tier supplier network mapping covering products, financials, delivery performance, and revenue exposure.",
+ pvs:[{n:"Dun & Bradstreet",d:"Global supplier database, supply chain risk scores"},{n:"Resilinc",d:"Supply chain mapping, disruption alerts, multi-tier visibility"},{n:"riskmethods",d:"Supply chain risk monitoring, ESG supplier scoring"}]},
+
+{id:"vendor-products",label:"Products &\nComponents",tier:3,cat:"biz",
+ i:"Sourced from procurement contracts, BOM (bill of materials), and supplier catalogs",
+ o:"Products & Components data feeds Supply Chain Risk Score — single-source dependencies and critical component reliance create concentration risk",
+ desc:"Bill of materials, SKU-level product sourcing, critical component mapping, and make-vs-buy analysis across the supply chain.",
+ pvs:[{n:"Resilinc",d:"Component-level supply chain mapping, BOM intelligence"},{n:"IHS Markit (S&P)",d:"Component pricing, availability, supply chain BOM data"},{n:"Supplyframe",d:"Electronic component supply chain intelligence"}]},
+
+{id:"vendor-delivery",label:"Delivery Status\n& Lead Times",tier:3,cat:"biz",
+ i:"Sourced from logistics platforms, ERP systems, and shipping carrier data",
+ o:"Delivery Status feeds Supply Chain Risk Score — late delivery patterns and increasing lead times are early disruption indicators",
+ desc:"On-time delivery rates, lead time trends, in-transit visibility, carrier performance, and shipping lane disruption data.",
+ pvs:[{n:"project44",d:"Real-time freight visibility, delivery performance analytics"},{n:"FourKites",d:"Supply chain visibility, predictive ETAs, disruption alerts"},{n:"Shippeo",d:"Carrier performance data, on-time delivery tracking"}]},
+
+{id:"vendor-revenue",label:"Revenue &\nSpend Impact",tier:3,cat:"biz",
+ i:"Sourced from procurement spend data, financial systems, and supplier revenue reports",
+ o:"Revenue & Spend Impact feeds Supply Chain Risk Score — concentration of spend with single suppliers creates financial exposure",
+ desc:"Supplier-level spend concentration, revenue dependency analysis, cost-of-disruption estimates, and procurement savings tracking.",
+ pvs:[{n:"Coupa",d:"Procurement spend analytics, supplier spend concentration"},{n:"Jaggaer",d:"Spend analysis, supplier risk-weighted cost modeling"},{n:"Dun & Bradstreet",d:"Supplier financial health, revenue concentration scoring"}]},
+
+{id:"vendor-fin",label:"Supplier\nFinancials",tier:3,cat:"biz",
+ i:"Sourced from supplier credit reports, public filings, and financial data providers",
+ o:"Supplier Financials feed Supply Chain Risk Score — financially distressed suppliers are a primary supply disruption risk",
+ desc:"Supplier credit scores, financial health ratings, payment behavior, bankruptcy risk scores, and financial stability indicators.",
+ pvs:[{n:"Dun & Bradstreet",d:"Supplier credit scores, PAYDEX, financial stress indicators"},{n:"Moody's Analytics",d:"Supplier PD models, credit risk assessments"},{n:"Experian Business",d:"Supplier credit risk scores, payment trends"}]},
+
+{id:"vendor-geo",label:"Geo Concentration\n& ESG Compliance",tier:3,cat:"biz",
+ i:"Sourced from supplier location data, ESG audits, and geopolitical risk databases",
+ o:"Geo Concentration & ESG Compliance feeds Supply Chain Risk Score — geographic clustering and ESG violations create regulatory and operational exposure",
+ desc:"Supplier geographic distribution, country risk exposure, geopolitical dependency mapping, and ESG/labor compliance audits.",
+ pvs:[{n:"riskmethods",d:"Geo risk monitoring, ESG supplier scoring, country risk"},{n:"EcoVadis",d:"Supplier ESG scorecards, compliance audits"},{n:"Dun & Bradstreet",d:"Country risk, geopolitical exposure, supplier location data"}]},
+
+// Sales & Marketing (expanded)
+{id:"sales-data",label:"Sales &\nMarketing Data",tier:2,cat:"biz",
+ i:"Sourced from CRM platforms, intent data providers, and digital intelligence services",
+ o:"Sales & Marketing Data feeds Sales & Marketing Score — intent signals and competitive positioning drive account prioritization",
+ desc:"Comprehensive commercial intelligence covering pipeline, lead quality, competitive positioning, and campaign effectiveness.",
+ pvs:[{n:"ZoomInfo",d:"Sales intelligence, contact data, company technographics"},{n:"Salesforce",d:"CRM pipeline data, sales activity, account history"},{n:"Bombora",d:"Intent data, topic surge, account scoring"}]},
+
+{id:"sales-pipeline",label:"Pipeline &\nOpportunity Data",tier:3,cat:"biz",
+ i:"Sourced from CRM systems and sales team inputs — captures active deals and their progression",
+ o:"Pipeline Data feeds Sales & Marketing Score — pipeline velocity and win rates signal commercial momentum",
+ desc:"Active deal pipeline, stage progression, win/loss rates, average deal size, and sales cycle duration by segment.",
+ pvs:[{n:"Salesforce",d:"Pipeline management, opportunity tracking, sales forecasting"},{n:"HubSpot",d:"CRM pipeline, deal stages, sales analytics"},{n:"Clari",d:"Revenue operations, pipeline AI, forecast accuracy"}]},
+
+{id:"sales-leads",label:"Lead Scoring &\nAccount Targeting",tier:3,cat:"biz",
+ i:"Sourced from firmographic databases, intent platforms, and marketing automation tools",
+ o:"Lead Scoring feeds Sales & Marketing Score — ICP match and intent signals prioritize commercial outreach",
+ desc:"ICP (Ideal Customer Profile) scoring, account-level propensity models, intent-driven prioritization, and ABM targeting.",
+ pvs:[{n:"6sense",d:"Account engagement scoring, AI-driven pipeline intelligence"},{n:"Demandbase",d:"ABM platform, account identification, intent data"},{n:"ZoomInfo",d:"ICP scoring, firmographic fit, buying committee data"}]},
+
+{id:"sales-compete",label:"Competitive\nIntelligence",tier:3,cat:"biz",
+ i:"Sourced from win/loss data, competitor monitoring tools, and market research",
+ o:"Competitive Intelligence feeds Sales & Marketing Score — positioning vs. competitors affects win probability and pricing strategy",
+ desc:"Win/loss analysis, competitive battle cards, pricing benchmarks, market share trends, and competitor product tracking.",
+ pvs:[{n:"Crayon",d:"Competitive intelligence, market tracking, battle cards"},{n:"Klue",d:"Competitive enablement, win/loss analysis"},{n:"Similarweb",d:"Digital market share, web traffic competitive benchmarking"}]},
+
+{id:"sales-campaign",label:"Campaign &\nChannel Performance",tier:3,cat:"biz",
+ i:"Sourced from marketing platforms, advertising networks, and attribution tools",
+ o:"Campaign Performance feeds Sales & Marketing Score — ROI by channel informs marketing spend optimization",
+ desc:"Email campaign metrics, paid media performance, SEO/SEM analytics, content engagement, and multi-touch attribution.",
+ pvs:[{n:"Marketo (Adobe)",d:"Marketing automation, campaign analytics, lead attribution"},{n:"Google Analytics / Ads",d:"Digital campaign performance, conversion tracking"},{n:"Salesforce Marketing Cloud",d:"Campaign ROI, customer journey analytics"}]},
+
+{id:"sales-segment",label:"Customer\nSegmentation",tier:3,cat:"biz",
+ i:"Sourced from CRM data, customer transaction history, and third-party firmographic data",
+ o:"Customer Segmentation feeds Sales & Marketing Score — segment-level propensity models sharpen targeting precision",
+ desc:"Revenue-based segmentation, industry verticals, firmographic clusters, behavioral cohorts, and predictive churn models.",
+ pvs:[{n:"Dun & Bradstreet",d:"Firmographic segmentation, revenue bands, industry classification"},{n:"Segment (Twilio)",d:"Customer data platform, behavioral cohorts, identity resolution"},{n:"CARTO",d:"Geospatial segmentation, location-based customer analytics"}]},
+
+// Other T2 ops nodes
+{id:"insurance-pol",label:"Insurance &\nPolicy Data",tier:2,cat:"biz",
+ i:"Sourced from insurance carriers, policy documents, and industry loss databases",
+ o:"Insurance & Policy Data feeds Insurance Risk Score — coverage terms and policy history inform underwriting",
+ desc:"Historical coverage, policy terms, endorsements, and premium history.",
+ pvs:[{n:"ISO (Verisk)",d:"Commercial lines policy data, industry experience"},{n:"ACORD",d:"Policy standards, structured insurance data"},{n:"Applied Systems",d:"Agency management, policy lifecycle data"}]},
+
+{id:"transactions",label:"Transaction\nData",tier:2,cat:"biz",
+ i:"Sourced from payment networks, bank feeds, and financial institution records",
+ o:"Transaction Data feeds Fraud Risk Score — anomalous payment patterns are primary fraud detection signals",
+ desc:"Payment flows, transaction volumes, counterparty networks, timing patterns, and cash flow behaviors.",
+ pvs:[{n:"SWIFT",d:"Cross-border transaction data, correspondent banking flows"},{n:"Mastercard / Visa Networks",d:"Payment transaction intelligence, merchant data"},{n:"Plaid",d:"Bank-level transaction feeds, ACH and card data"}]},
+
+{id:"adv-media",label:"Adverse Media",tier:2,cat:"biz",
+ i:"Sourced from news wires, regulatory announcements, court records, and web monitoring services",
+ o:"Adverse Media feeds KYC/AML Score and Operational Risk Score — negative news escalates compliance and reputational risk",
+ desc:"Negative news coverage, reputational risk events, regulatory investigations, and ESG controversies.",
+ pvs:[{n:"Refinitiv World-Check",d:"Adverse media screening, reputational risk profiles"},{n:"ComplyAdvantage",d:"Real-time adverse media monitoring, AI-driven screening"},{n:"Dow Jones Factiva",d:"Global news archive, 33,000+ sources, entity tagging"}]},
+
+{id:"climate-data",label:"Physical Climate\nRisk",tier:2,cat:"biz",
+ i:"Sourced from climate science models, satellite data, and geospatial hazard databases",
+ o:"Physical Climate Risk feeds Insurance Risk Score, CRE Score, and ESG Score — asset-level hazard exposure drives underwriting and climate disclosures",
+ desc:"Asset-level physical risk scores covering flood, wildfire, hurricane, heat, and sea-level rise. Aligned to TCFD frameworks.",
+ pvs:[{n:"Moody's / Four Twenty Seven",d:"Physical climate risk scores, 2,000+ cities, asset-level"},{n:"Jupiter Intelligence",d:"Climate scenario modeling, peril-level risk scores"},{n:"CoreLogic",d:"Natural hazard risk, property-level climate exposure"}]},
+
+{id:"claims-data",label:"Claims Data",tier:2,cat:"biz",
+ i:"Sourced from insurance carriers, third-party administrators, and industry claims databases",
+ o:"Claims Data feeds Insurance Risk Score — loss frequency and severity are the primary actuarial inputs to underwriting",
+ desc:"Historical loss events, claim frequency, severity, reserve levels, and litigation outcomes.",
+ pvs:[{n:"ISO (Verisk)",d:"Industry claims database, loss development factors"},{n:"FRISS",d:"Claims fraud detection, real-time risk scoring"},{n:"Mitchell International",d:"Claims benchmarking, medical and auto claims analytics"}]},
+
+{id:"econ-data",label:"Economic &\nMacro Data",tier:2,cat:"biz",
+ i:"Sourced from central banks, statistical agencies (BLS, BEA, Eurostat), and macroeconomic research",
+ o:"Economic & Macro Data feeds Credit Risk Score and Peer Benchmark Score — macro conditions contextualize company-level financial risk",
+ desc:"GDP growth, interest rates, inflation, unemployment, sector PMIs, and credit cycle indicators.",
+ pvs:[{n:"Bloomberg Economics",d:"Macro forecasts, real-time economic indicators"},{n:"Oxford Economics",d:"Scenario modeling, sector-level macro forecasts"},{n:"Moody's Analytics CreditCycle",d:"Macro-credit linkage, through-the-cycle forecasting"}]},
+
+{id:"product-data",label:"Product &\nIP Data",tier:2,cat:"biz",
+ i:"Sourced from patent databases, R&D disclosures, and technology intelligence platforms",
+ o:"Product & IP Data feeds M&A Valuation and Peer Benchmark Score — IP strength drives acquisition premiums and competitive differentiation",
+ desc:"Patent portfolio analysis, R&D spending, product revenue mix, brand asset valuations, and technology differentiation.",
+ pvs:[{n:"Derwent Analytics (Clarivate)",d:"Patent data, IP valuation, innovation benchmarking"},{n:"PitchBook",d:"Product / technology descriptions, innovation signals"},{n:"CB Insights",d:"Technology intelligence, market maps, patent analytics"}]},
+
+// ─── T3: Scores & Outputs ─────────────────────────────────────────────────────
+{id:"gov-score",label:"Governance Score",tier:3,cat:"identity",
+ i:"Management & Board Info, Ownership / UBO, and ESG Data collectively determine Governance Score",
+ o:"Governance Score feeds ESG Score as the 'G' pillar",
+ desc:"Composite of board independence, executive compensation alignment, ownership transparency, and shareholder rights.",
+ pvs:[{n:"ISS Governance",d:"Board quality scores, governance risk indicators"},{n:"Glass Lewis",d:"Governance research, proxy voting intelligence"},{n:"Sustainalytics (Moody's)",d:"Governance pillar score within ESG framework"}]},
+
+{id:"esg-score",label:"ESG Score",tier:3,cat:"biz",
+ i:"Environmental Score (E), Social Score (S), and Governance Score (G) are combined to produce the aggregate ESG Score",
+ o:"ESG Score feeds Credit Rating and Peer Benchmark Score — ESG increasingly influences credit assessments and competitive positioning",
+ desc:"Composite ESG rating combining environmental, social, and governance pillar scores.",
+ pvs:[{n:"Sustainalytics (Moody's)",d:"ESG Risk Ratings — industry-adjusted, 40K+ companies"},{n:"MSCI ESG",d:"AAA–CCC ESG ratings, controversy overlay"},{n:"S&P Global ESG Scores",d:"ESG scores tied to CSA, used in S&P indices"}]},
+
+{id:"credit-risk-score",label:"Credit Risk Score",tier:3,cat:"financial",
+ i:"Leverage Ratio, Cash Flow & Liquidity, Financial Statements, ESG Score, and Economic & Macro Data feed the Credit Risk Score",
+ o:"Credit Risk Score feeds Credit Rating, Lending Score, Probability of Default, and Expected Loss",
+ desc:"Probability of default (PD), LGD, and composite credit risk scores integrating financial, ESG, and macro factors.",
+ pvs:[{n:"Moody's Analytics",d:"EDF, RiskCalc, CreditEdge — industry-standard PD models"},{n:"S&P Global Ratings",d:"Issuer credit ratings, CreditModel scores"},{n:"Fitch Ratings",d:"Credit ratings, sector-specific risk models"}]},
+
+{id:"credit-rating",label:"Credit Rating",tier:3,cat:"financial",
+ i:"Credit Risk Score, Leverage Ratio, Cash Flow & Liquidity, Financial Statements, ESG Score, and Operational Risk Score all feed the Credit Rating — aligning inputs with the Credit Risk Score",
+ o:"Credit Rating is a terminal output consumed by investors, lenders, and regulators; it also informs Lending Score",
+ desc:"Issuer or instrument-level credit rating (e.g., Aaa–C) representing overall creditworthiness. Distinct from Credit Risk Score — this is the final published rating.",
+ pvs:[{n:"Moody's Ratings",d:"Issuer and instrument ratings, outlook, watch list"},{n:"S&P Global Ratings",d:"Issuer credit ratings, sector-specific methodology"},{n:"Fitch Ratings",d:"Long/short-term ratings, recovery analysis"}]},
+
+{id:"prob-default",label:"Probability of\nDefault",tier:3,cat:"financial",
+ i:"Credit Risk Score is the primary quantitative driver of Probability of Default",
+ o:"Probability of Default feeds Expected Loss — PD is one of the three components of the EL calculation (PD × LGD × EAD)",
+ desc:"Statistical estimate of likelihood of default within a defined time horizon. Core input to Basel III capital calculations.",
+ pvs:[{n:"Moody's Analytics EDF",d:"Market-implied and fundamental PD models, 40K+ public firms"},{n:"S&P CreditModel",d:"PD estimates for public and private companies"},{n:"Kamakura Risk Manager",d:"Reduced-form PD models, term structure of default"}]},
+
+{id:"mkt-rating",label:"Market Implied\nRating",tier:3,cat:"financial",
+ i:"Bonds & Instruments pricing (CDS spreads, bond yields) is translated into a Market Implied Rating",
+ o:"Market Implied Rating is a terminal output — divergence from agency ratings signals early credit deterioration",
+ desc:"Credit rating implied by market prices rather than agency methodologies. Often a leading indicator of agency rating changes.",
+ pvs:[{n:"Moody's CreditView",d:"Market implied ratings, CDS-based signals, rating divergence alerts"},{n:"Bloomberg DRSK",d:"Default risk tool, market-implied default probabilities"},{n:"ICE BofA",d:"Credit spread indices, implied rating migration"}]},
+
+{id:"expected-loss",label:"Expected Loss",tier:3,cat:"financial",
+ i:"Probability of Default and Credit Risk Score (which captures LGD and EAD) together produce Expected Loss: EL = PD × LGD × EAD",
+ o:"Expected Loss is a terminal metric for CECL/IFRS 9 provisioning, capital adequacy, and portfolio risk management",
+ desc:"Forward-looking dollar estimate of credit loss used for provisioning under CECL and IFRS 9 accounting standards.",
+ pvs:[{n:"Moody's Analytics",d:"CECL/IFRS 9 expected loss modeling, scenario analysis"},{n:"S&P Global",d:"Expected loss estimates, credit portfolio analytics"},{n:"SAS Credit Risk",d:"EL modeling, regulatory capital calculation platforms"}]},
+
+{id:"kyc-aml",label:"KYC / AML Score",tier:3,cat:"identity",
+ i:"Legal Entity, Ownership/UBO, Sanctions, PEP/SOE, Litigation, and Adverse Media data are synthesized into the KYC/AML Score",
+ o:"KYC/AML Score is a terminal compliance output — it triggers enhanced due diligence, transaction monitoring, and SAR filing",
+ desc:"Consolidated KYC and AML risk score. Incorporates identity verification, sanctions screening, PEP checks, adverse media, and beneficial ownership clarity.",
+ pvs:[{n:"Refinitiv World-Check",d:"KYC onboarding, enhanced due diligence screening"},{n:"ComplyAdvantage",d:"Real-time AML screening, dynamic risk scoring"},{n:"NICE Actimize",d:"AML transaction monitoring, suspicious activity detection"}]},
+
+{id:"op-risk",label:"Operational\nRisk Score",tier:3,cat:"identity",
+ i:"Litigation, Cyber Risk, Vendor Data, and Adverse Media collectively feed the Operational Risk Score",
+ o:"Operational Risk Score feeds Credit Rating — it is a qualitative overlay applied alongside financial metrics",
+ desc:"Composite operational risk score combining cyber, legal, supply chain, and reputational risk dimensions.",
+ pvs:[{n:"Moody's Analytics",d:"Integrated risk analytics, operational risk models"},{n:"Verisk Analytics",d:"Risk modeling, loss forecasting"},{n:"RMS",d:"Catastrophe and operational risk modeling"}]},
+
+{id:"fraud-score",label:"Fraud Risk Score",tier:3,cat:"biz",
+ i:"Transaction Data and Customer Data feed the Fraud Risk Score — anomalous payment patterns and identity inconsistencies are core signals",
+ o:"Fraud Risk Score is a terminal output triggering real-time transaction blocks and fraud case management",
+ desc:"Composite fraud risk score using network analysis, behavioral anomalies, and identity inconsistencies.",
+ pvs:[{n:"LexisNexis Risk Solutions",d:"Identity fraud detection, link analysis, device intelligence"},{n:"FICO Falcon",d:"Fraud scoring models, real-time decisioning"},{n:"Experian Hunter",d:"Application fraud, synthetic identity detection"}]},
+
+{id:"supply-score",label:"Supply Chain\nRisk Score",tier:3,cat:"biz",
+ i:"Products & Components, Delivery Status, Revenue & Spend Impact, Supplier Financials, and Geo Concentration data collectively determine the Supply Chain Risk Score",
+ o:"Supply Chain Risk Score is a terminal output for procurement decisions and business continuity planning",
+ desc:"Multi-tier supply chain risk rating covering supplier health, concentration, geographic exposure, and ESG compliance.",
+ pvs:[{n:"Dun & Bradstreet",d:"Supplier risk scores, supply chain intelligence"},{n:"Resilinc",d:"Supply chain disruption scores, real-time alerts"},{n:"Coupa Risk Assess",d:"Supplier risk assessment, ESG due diligence"}]},
+
+{id:"ins-score",label:"Insurance Risk\nScore",tier:3,cat:"biz",
+ i:"Claims Data, Insurance & Policy Data, CRE Data, Cyber Risk, and Physical Climate Risk collectively feed the Insurance Risk Score",
+ o:"Insurance Risk Score is a terminal output determining policy pricing, coverage limits, and portfolio monitoring triggers",
+ desc:"P&C underwriting score combining property exposure, claims history, cyber risk, and natural hazard exposure.",
+ pvs:[{n:"Verisk (ISO)",d:"Commercial lines risk scores, loss cost multipliers"},{n:"CoreLogic",d:"Property risk scores, climate risk, hazard data"},{n:"FRISS",d:"Real-time underwriting risk intelligence"}]},
+
+{id:"lending-score",label:"Lending Score",tier:3,cat:"financial",
+ i:"Credit Risk Score, Credit Rating, Leverage Ratio, and Cash Flow & Liquidity together feed the Lending Score",
+ o:"Lending Score is a terminal output for loan origination decisions, covenant structuring, and portfolio monitoring",
+ desc:"Composite lending underwriting score used in origination, monitoring, and covenant compliance.",
+ pvs:[{n:"Moody's Analytics RiskCalc",d:"Private firm PD models, lending risk scoring"},{n:"Experian Business Credit",d:"Commercial credit scores for lending decisions"},{n:"Equifax Business",d:"Business credit risk, payment behavior scoring"}]},
+
+{id:"sales-score",label:"Sales &\nMarketing Score",tier:3,cat:"biz",
+ i:"Pipeline Data, Lead Scoring, Competitive Intel, Campaign Performance, and Customer Segmentation feed the Sales & Marketing Score",
+ o:"Sales & Marketing Score is a terminal output driving CRM prioritization and marketing campaign targeting",
+ desc:"Account propensity score combining pipeline health, ICP fit, intent signals, and competitive positioning.",
+ pvs:[{n:"ZoomInfo",d:"Sales intelligence scores, ICP matching, intent layers"},{n:"6sense",d:"Revenue AI, account engagement scoring"},{n:"Bombora",d:"Intent data-driven account scoring, surge topics"}]},
+
+{id:"cre-score",label:"CRE Score",tier:3,cat:"biz",
+ i:"Parcel Data, Size/Zoning, Tenant Data, NOI/Cap Rate, Vacancy Rate, and Physical Climate Risk together determine the CRE Score",
+ o:"CRE Score is a terminal output for CRE loan underwriting, CMBS structuring, and real estate investment decisions",
+ desc:"CRE underwriting score covering LTV, DSCR, cap rates, occupancy, tenant quality, and climate risk.",
+ pvs:[{n:"CoStar Group",d:"CRE market analytics, property valuations, comp data"},{n:"Moody's CRE Analytics",d:"CMBS analytics, CRE credit risk models"},{n:"Green Street",d:"CRE sector research, property market risk scores"}]},
+
+{id:"peer-score",label:"Peer Benchmark\nScore",tier:3,cat:"financial",
+ i:"ESG Score, Revenue Growth, Cyber Risk, Product & IP Data, and Economic & Macro Data collectively feed the Peer Benchmark Score",
+ o:"Peer Benchmark Score is a terminal output for competitive intelligence and strategic planning",
+ desc:"Composite peer comparison score ranking a company vs. its industry cohort across financial, ESG, and operational metrics.",
+ pvs:[{n:"S&P Global Market Intelligence",d:"Peer benchmarking, financial screening, comp sets"},{n:"Moody's Analytics",d:"Industry peer analytics, relative risk scoring"},{n:"Bloomberg Intelligence",d:"Sector-level benchmarking, peer financial analysis"}]},
+
+{id:"ma-val",label:"M&A Valuation",tier:3,cat:"financial",
+ i:"Revenue Growth and Product & IP Data are the core inputs — revenue trajectory sets the DCF foundation while IP drives strategic premium",
+ o:"M&A Valuation is a terminal output supporting LOI pricing, fairness opinions, and SPA negotiations",
+ desc:"Enterprise and equity valuation outputs from DCF, LBO, and comparable transaction analyses.",
+ pvs:[{n:"PitchBook",d:"M&A transaction comps, deal multiples, precedent transactions"},{n:"Mergermarket (ION)",d:"Deal intelligence, target profiles, valuation benchmarks"},{n:"FactSet M&A",d:"Transaction data, deal screening, valuation analytics"}]},
+];
+
+// ─── LINKS ────────────────────────────────────────────────────────────────────
+const LK=[
+  // T0→T1
+  ["company","corp-id"],["company","fin"],["company","biz"],
+  // Identity T1→T2
+  ["corp-id","legal-entity"],["corp-id","ownership"],["corp-id","sanctions"],
+  ["corp-id","pep-soe"],["corp-id","mgmt-info"],["corp-id","litigation"],
+  ["legal-entity","ownership"],
+  // Financial T1→T2
+  ["fin","fin-stmts"],["fin","bonds"],
+  ["fin-stmts","leverage"],["fin-stmts","rev-growth"],["fin-stmts","cashflow"],
+  // Biz T1→T2
+  ["biz","cyber"],["biz","esg-data"],["biz","cre-data"],["biz","cust-data"],
+  ["biz","vendor-data"],["biz","sales-data"],["biz","insurance-pol"],
+  ["biz","transactions"],["biz","adv-media"],["biz","climate-data"],
+  ["biz","claims-data"],["biz","econ-data"],["biz","product-data"],
+  // CRE sub-nodes
+  ["cre-data","cre-parcel"],["cre-data","cre-sqft"],["cre-data","cre-tenants"],
+  ["cre-tenants","cre-noi"],["cre-tenants","cre-vacancy"],
+  // Vendor sub-nodes
+  ["vendor-data","vendor-products"],["vendor-data","vendor-delivery"],
+  ["vendor-data","vendor-revenue"],["vendor-data","vendor-fin"],["vendor-data","vendor-geo"],
+  // Sales sub-nodes
+  ["sales-data","sales-pipeline"],["sales-data","sales-leads"],["sales-data","sales-compete"],
+  ["sales-data","sales-campaign"],["sales-data","sales-segment"],
+  // ESG pillar scores
+  ["esg-data","env-score"],["esg-data","social-score"],["esg-data","gov-score"],
+  ["mgmt-info","gov-score"],["ownership","gov-score"],
+  ["env-score","esg-score"],["social-score","esg-score"],["gov-score","esg-score"],
+  // Financial scores — aligned inputs for Credit Risk Score AND Credit Rating
+  ["leverage","credit-risk-score"],["cashflow","credit-risk-score"],
+  ["fin-stmts","credit-risk-score"],["esg-score","credit-risk-score"],["econ-data","credit-risk-score"],
+  ["leverage","credit-rating"],["cashflow","credit-rating"],
+  ["fin-stmts","credit-rating"],["esg-score","credit-rating"],["op-risk","credit-rating"],
+  ["credit-risk-score","credit-rating"],
+  // PD / EL
+  ["credit-risk-score","prob-default"],["prob-default","expected-loss"],["credit-risk-score","expected-loss"],
+  // Market implied
+  ["bonds","mkt-rating"],
+  // Lending
+  ["credit-risk-score","lending-score"],["credit-rating","lending-score"],
+  ["leverage","lending-score"],["cashflow","lending-score"],
+  // KYC/AML consolidated
+  ["legal-entity","kyc-aml"],["ownership","kyc-aml"],["sanctions","kyc-aml"],
+  ["pep-soe","kyc-aml"],["litigation","kyc-aml"],["adv-media","kyc-aml"],
+  // Operational Risk
+  ["litigation","op-risk"],["cyber","op-risk"],["vendor-data","op-risk"],["adv-media","op-risk"],
+  // Fraud
+  ["transactions","fraud-score"],["cust-data","fraud-score"],
+  // Supply chain score ← sub-nodes
+  ["vendor-products","supply-score"],["vendor-delivery","supply-score"],
+  ["vendor-revenue","supply-score"],["vendor-fin","supply-score"],["vendor-geo","supply-score"],
+  // Insurance
+  ["claims-data","ins-score"],["insurance-pol","ins-score"],
+  ["cre-data","ins-score"],["cyber","ins-score"],["climate-data","ins-score"],
+  // CRE score ← sub-nodes + climate
+  ["cre-parcel","cre-score"],["cre-sqft","cre-score"],["cre-noi","cre-score"],
+  ["cre-vacancy","cre-score"],["climate-data","cre-score"],
+  // Sales score ← sub-nodes
+  ["sales-pipeline","sales-score"],["sales-leads","sales-score"],
+  ["sales-compete","sales-score"],["sales-campaign","sales-score"],["sales-segment","sales-score"],
+  // Peer
+  ["esg-score","peer-score"],["rev-growth","peer-score"],
+  ["cyber","peer-score"],["product-data","peer-score"],["econ-data","peer-score"],
+  // MA
+  ["rev-growth","ma-val"],["product-data","ma-val"],
+];
+
+// ─── USE CASES ────────────────────────────────────────────────────────────────
+const UC={
+  credit:{title:"Credit Risk",color:"#3a9fd6",
+   desc:"Assess ability to service debt obligations. Integrates leverage, cash flow, ESG, and operational risk into credit ratings and risk metrics used for bond issuance, loan pricing, and investor decisions.",
+   nodes:["company","fin","biz","fin-stmts","leverage","cashflow","esg-data","env-score","social-score","gov-score","esg-score","credit-risk-score","op-risk","cyber","credit-rating","prob-default","expected-loss","econ-data","adv-media"]},
+
+  ma:{title:"M&A Diligence",color:"#c9a84c",
+   desc:"Pre-acquisition analysis spanning financial health, management quality, IP assets, and risk exposure. Supports LOI valuation, SPA negotiations, and integration planning.",
+   nodes:["company","corp-id","fin","biz","mgmt-info","ownership","legal-entity","fin-stmts","rev-growth","product-data","vendor-data","vendor-fin","vendor-geo","op-risk","litigation","adv-media","esg-data","env-score","social-score","gov-score","esg-score","ma-val","peer-score"]},
+
+  peer:{title:"Peer Benchmarking",color:"#b3abff",
+   desc:"Compare a company against its industry peer group across financial performance, ESG, cyber resilience, and operational metrics to identify relative strengths and vulnerabilities.",
+   nodes:["company","fin","biz","fin-stmts","rev-growth","esg-data","env-score","social-score","gov-score","esg-score","cyber","product-data","econ-data","peer-score"]},
+
+  kyc:{title:"KYC / AML",color:"#7c6df5",
+   desc:"Know Your Customer and AML compliance. Covers entity verification, UBO, sanctions, PEP screening, adverse media, and transaction monitoring required for financial institution onboarding.",
+   nodes:["company","corp-id","biz","legal-entity","ownership","sanctions","pep-soe","mgmt-info","litigation","adv-media","transactions","kyc-aml"]},
+
+  fraud:{title:"Fraud Detection",color:"#e06c8a",
+   desc:"Identify fraudulent entities, synthetic identities, and anomalous payment patterns using network analysis and behavioral signals.",
+   nodes:["company","corp-id","biz","legal-entity","ownership","sanctions","pep-soe","cust-data","vendor-data","transactions","adv-media","fraud-score","kyc-aml"]},
+
+  supply:{title:"Supply Chain Risk",color:"#f0a04b",
+   desc:"Map and monitor multi-tier supplier networks for concentration risk, financial vulnerability, ESG compliance, and geopolitical disruption exposure.",
+   nodes:["company","corp-id","biz","ownership","vendor-data","vendor-products","vendor-delivery","vendor-revenue","vendor-fin","vendor-geo","esg-data","social-score","op-risk","supply-score","econ-data"]},
+
+  lending:{title:"End-to-End Lending",color:"#93d4f5",
+   desc:"Full loan origination and monitoring — from initial underwriting through ongoing covenant compliance, integrating financial health, credit risk, and identity.",
+   nodes:["company","fin","corp-id","fin-stmts","leverage","cashflow","credit-risk-score","legal-entity","ownership","sanctions","pep-soe","lending-score","credit-rating","prob-default","expected-loss","econ-data"]},
+
+  insurance:{title:"P&C Insurance",color:"#92e8cc",
+   desc:"P&C underwriting and ongoing policy monitoring. Combines property data, claims history, cyber exposure, natural hazard risk, and financial health.",
+   nodes:["company","biz","fin","cre-data","cre-parcel","cre-sqft","cre-tenants","cre-noi","cre-vacancy","insurance-pol","claims-data","cyber","climate-data","esg-data","fin-stmts","ins-score","cre-score","op-risk"]},
+
+  sales:{title:"Sales & Marketing",color:"#d4a853",
+   desc:"Account prioritization, lead scoring, and competitive intelligence for commercial teams combining intent signals, firmographic fit, and market position.",
+   nodes:["company","biz","fin","cust-data","sales-data","sales-pipeline","sales-leads","sales-compete","sales-campaign","sales-segment","product-data","rev-growth","econ-data","peer-score","sales-score"]},
+
+  cre:{title:"Comm. Real Estate",color:"#e8b892",
+   desc:"CRE investment analysis, loan underwriting, and portfolio monitoring covering property valuations, market conditions, climate risk, and borrower financial health.",
+   nodes:["company","biz","fin","cre-data","cre-parcel","cre-sqft","cre-tenants","cre-noi","cre-vacancy","insurance-pol","claims-data","climate-data","fin-stmts","leverage","cashflow","cre-score","ins-score","credit-risk-score","lending-score"]},
+
+  climate:{title:"Climate Risk",color:"#5ee7a8",
+   desc:"Physical and transition climate risk assessment across assets and portfolios. Supports TCFD disclosure, regulatory stress testing (DFAST, ECB), and climate-adjusted credit/insurance underwriting.",
+   nodes:["company","biz","fin","climate-data","esg-data","env-score","social-score","esg-score","cre-data","cre-parcel","cre-sqft","ins-score","cre-score","credit-risk-score","credit-rating","peer-score"]},
+
+  counterparty:{title:"Counterparty Risk",color:"#ff9f7a",
+   desc:"360° risk assessment of a counterparty before entering a financial contract, trade, or partnership. Combines credit, legal, operational, and ESG dimensions.",
+   nodes:["company","corp-id","fin","biz","legal-entity","ownership","sanctions","pep-soe","mgmt-info","litigation","fin-stmts","leverage","cashflow","adv-media","cyber","esg-score","credit-risk-score","credit-rating","op-risk","kyc-aml"]},
+};
+
+// ─── D3 SETUP ─────────────────────────────────────────────────────────────────
+const gc=document.getElementById("gc");
+const svg=d3.select("#graph");
+const g=svg.append("g").attr("class","root");
+let W=gc.clientWidth,H=gc.clientHeight;
+
+const zoom=d3.zoom().scaleExtent([.1,5]).on("zoom",e=>g.attr("transform",e.transform));
+svg.call(zoom);
+
+const ND=NODES.map(n=>({...n}));
+const LD=LK.map(([s,t])=>({source:s,target:t}));
+
+// Seed center node
+const root=ND.find(n=>n.tier===0);
+root.x=W/2; root.y=H/2; root.fx=W/2; root.fy=H/2;
+setTimeout(()=>{root.fx=null;root.fy=null;},3000);
+
+const sim=d3.forceSimulation(ND)
+  .force("link",d3.forceLink(LD).id(d=>d.id).distance(d=>{
+    const st=d.source.tier??0,tt=d.target.tier??0;
+    const mx=Math.max(st,tt);
+    if(mx<=1) return 200; if(mx===2) return 140; return 100;
+  }).strength(0.45))
+  .force("charge",d3.forceManyBody().strength(d=>d.tier===0?-800:d.tier===1?-500:-280))
+  .force("center",d3.forceCenter(W/2,H/2).strength(0.02))
+  .force("collide",d3.forceCollide(d=>nr(d)+28))
+  .force("radial0",d3.forceRadial(0,W/2,H/2).strength(d=>d.tier===0?1:0))
+  .force("radial1",d3.forceRadial(210,W/2,H/2).strength(d=>d.tier===1?.35:0))
+  .force("radial2",d3.forceRadial(400,W/2,H/2).strength(d=>d.tier===2?.12:0))
+  .force("radial3",d3.forceRadial(560,W/2,H/2).strength(d=>d.tier===3?.10:0));
+
+const lkSel=g.append("g").selectAll("line")
+  .data(LD).enter().append("line")
+  .attr("class",d=>{
+    const st=d.source.tier??0,tt=d.target.tier??0,mx=Math.max(st,tt);
+    return `lk ${mx<=1?"lkt0":mx===2?"lkt1":"lkt2"}`;
+  })
+  .attr("stroke",d=>{
+    const n=ND.find(x=>x.id===(d.source.id??d.source));
+    return n?cc(n)+"88":"#2a3441";
+  });
+
+const ndSel=g.append("g").selectAll(".nd")
+  .data(ND).enter().append("g")
+  .attr("class","nd").attr("data-id",d=>d.id)
+  .call(d3.drag()
+    .on("start",(e,d)=>{if(!e.active)sim.alphaTarget(.3).restart();d.fx=d.x;d.fy=d.y})
+    .on("drag",(e,d)=>{d.fx=e.x;d.fy=e.y})
+    .on("end",(e,d)=>{if(!e.active)sim.alphaTarget(0);d.fx=null;d.fy=null}));
+
+ndSel.append("circle")
+  .attr("r",nr)
+  .attr("fill",d=>cc(d)+"22")
+  .attr("stroke",d=>cc(d))
+  .attr("stroke-width",d=>d.tier===0?3:d.tier===1?2.2:d.tier===2?1.5:1.2);
+
+ndSel.each(function(d){
+  const el=d3.select(this),parts=d.label.split("\n"),yb=nr(d)+12;
+  parts.forEach((p,i)=>{
+    el.append("text").text(p)
+      .attr("text-anchor","middle").attr("dy",yb+i*10)
+      .attr("font-size",d.tier===0?"12px":d.tier===1?"11px":d.tier===2?"10px":"9px")
+      .attr("font-weight",d.tier<=1?"500":"300")
+      .attr("fill",d.tier===0?"#c9a84c":d.tier===1?cc(d):"#7a90a8");
+  });
+});
+
+sim.on("tick",()=>{
+  lkSel.attr("x1",d=>d.source.x).attr("y1",d=>d.source.y)
+       .attr("x2",d=>d.target.x).attr("y2",d=>d.target.y);
+  ndSel.attr("transform",d=>`translate(${d.x},${d.y})`);
+});
+
+document.getElementById("str").textContent=`${NODES.length} nodes`;
+
+// ─── TOOLTIP ──────────────────────────────────────────────────────────────────
+const tt=document.getElementById("tt");
+ndSel
+  .on("mousemove",(e,d)=>{
+    tt.style.left=(e.clientX+15)+"px"; tt.style.top=(e.clientY-8)+"px";
+    document.getElementById("ttn").textContent=d.label.replace("\n"," ");
+    const ri=document.getElementById("tri"),ro=document.getElementById("tro");
+    if(d.i){document.getElementById("ttin").textContent=d.i;ri.style.display="flex";}
+    else ri.style.display="none";
+    if(d.o){document.getElementById("ttout").textContent=d.o;ro.style.display="flex";}
+    else ro.style.display="none";
+    tt.classList.add("vis");
+  })
+  .on("mouseleave",()=>tt.classList.remove("vis"));
+
+// ─── PANEL ────────────────────────────────────────────────────────────────────
+function openPanel({tag,accent,title,subtitle,lbl1,nl,lbl2,pvs}){
+  document.getElementById("sp").classList.add("open");
+  document.getElementById("stag").textContent=tag;
+  document.getElementById("sbar").style.background=accent||"var(--cr)";
+  document.getElementById("stit").textContent=title;
+  document.getElementById("ssub").textContent=subtitle;
+  document.getElementById("slbl1").textContent=lbl1||"Nodes";
+  document.getElementById("slbl2").textContent=lbl2||"Data Providers";
+  const nel=document.getElementById("snl"); nel.innerHTML="";
+  (nl||[]).forEach(it=>{
+    const d=document.createElement("div"); d.className="sni";
+    d.innerHTML=`<div class="sdt" style="background:${it.color}"></div><span>${it.label}</span>`;
+    nel.appendChild(d);
+  });
+  if(!nl?.length) nel.innerHTML='<div class="sem">—</div>';
+  const pel=document.getElementById("spl"); pel.innerHTML="";
+  (pvs||[]).forEach(p=>{
+    const d=document.createElement("div"); d.className="spv";
+    d.innerHTML=`<div class="spn">${p.n}</div><div class="spd">${p.d}</div>`;
+    pel.appendChild(d);
+  });
+  if(!pvs?.length) pel.innerHTML='<div class="sem">—</div>';
+  document.getElementById("spi").scrollTop=0;
+}
+
+function closePanel(){ document.getElementById("sp").classList.remove("open"); }
+document.getElementById("spc").addEventListener("click",e=>{e.stopPropagation();closePanel();});
+svg.on("click",closePanel);
+
+ndSel.on("click",(e,d)=>{
+  e.stopPropagation();
+  const sc=2.2;
+  svg.transition().duration(450).call(zoom.transform,
+    d3.zoomIdentity.translate(W/2-d.x*sc,H/2-d.y*sc).scale(sc));
+  const usedIn=Object.entries(UC)
+    .filter(([,u])=>u.nodes.includes(d.id))
+    .map(([,u])=>({label:u.title,color:u.color}));
+  openPanel({
+    tag:"Node Detail",accent:cc(d),
+    title:d.label.replace("\n"," "),subtitle:d.desc,
+    lbl1:"Used In Use Cases",nl:usedIn,
+    lbl2:"Data Providers",pvs:d.pvs
+  });
+  document.getElementById("stl").textContent=
+    `Node: ${d.label.replace("\n"," ")} · ${d.cat} · Tier ${d.tier}`;
+});
+
+// ─── FILTERS + TIDY LAYOUT ────────────────────────────────────────────────────
+document.querySelectorAll(".fb").forEach(btn=>{
+  btn.addEventListener("click",()=>{
+    document.querySelectorAll(".fb").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    applyFilter(btn.dataset.filter);
+  });
+});
+
+function applyFilter(filter){
+  if(filter==="all"){
+    ndSel.classed("fd",false); lkSel.classed("fd",false); closePanel();
+    svg.transition().duration(450).call(zoom.transform,d3.zoomIdentity);
+    sim.force("radial1",d3.forceRadial(210,W/2,H/2).strength(d=>d.tier===1?.35:0))
+       .force("radial2",d3.forceRadial(400,W/2,H/2).strength(d=>d.tier===2?.12:0))
+       .force("radial3",d3.forceRadial(560,W/2,H/2).strength(d=>d.tier===3?.10:0))
+       .force("center",d3.forceCenter(W/2,H/2).strength(0.02))
+       .alpha(0.3).restart();
+    document.getElementById("stl").textContent="Showing all nodes · Hover to explore · Click for detail";
+    document.getElementById("str").textContent=`${NODES.length} nodes`;
+    return;
+  }
+
+  const uc=UC[filter];
+  const active=new Set(uc.nodes);
+  ndSel.classed("fd",d=>!active.has(d.id));
+  lkSel.classed("fd",d=>!active.has(d.source.id??d.source)||!active.has(d.target.id??d.target));
+
+  // Tidy layout: place active nodes in a neat radial arrangement around center
+  const an=ND.filter(d=>active.has(d.id));
+  const cx=W/2, cy=H/2;
+
+  // Group by tier
+  const byTier={};
+  an.forEach(d=>{
+    if(!byTier[d.tier]) byTier[d.tier]=[];
+    byTier[d.tier].push(d);
+  });
+
+  const radii={0:0,1:180,2:330,3:470};
+
+  Object.entries(byTier).forEach(([tier,nodes])=>{
+    const t=parseInt(tier);
+    const r=radii[t]||350;
+    nodes.forEach((nd,i)=>{
+      const angle=(i/nodes.length)*Math.PI*2 - Math.PI/2;
+      nd.fx=cx+Math.cos(angle)*r;
+      nd.fy=cy+Math.sin(angle)*r;
+    });
+  });
+
+  sim.alpha(0.5).restart();
+
+  // Release fixed positions after settling
+  setTimeout(()=>{
+    an.forEach(d=>{d.fx=null;d.fy=null;});
+    sim.alpha(0.1).restart();
+  },1200);
+
+  // Fit viewport
+  setTimeout(()=>{
+    const xs=an.map(d=>d.x).filter(Boolean);
+    const ys=an.map(d=>d.y).filter(Boolean);
+    if(!xs.length) return;
+    const minX=Math.min(...xs),maxX=Math.max(...xs);
+    const minY=Math.min(...ys),maxY=Math.max(...ys);
+    const pw=document.getElementById("sp").classList.contains("open")?320:0;
+    const vw=W-pw, vh=H;
+    const dw=maxX-minX+160, dh=maxY-minY+160;
+    const sc=Math.min(0.95,Math.min(vw/dw,vh/dh));
+    const tcx=(minX+maxX)/2, tcy=(minY+maxY)/2;
+    svg.transition().duration(700).call(zoom.transform,
+      d3.zoomIdentity.translate(vw/2+pw-tcx*sc,vh/2-tcy*sc).scale(sc));
+  },1400);
+
+  openPanel({
+    tag:"Use Case",accent:uc.color,title:uc.title,subtitle:uc.desc,
+    lbl1:"Active Nodes",
+    nl:uc.nodes.map(id=>{
+      const nd=ND.find(n=>n.id===id);
+      return nd?{label:nd.label.replace("\n"," "),color:cc(nd)}:null;
+    }).filter(Boolean),
+    lbl2:"",pvs:[]
+  });
+  document.getElementById("stl").textContent=`Use Case: ${uc.title} · ${an.length} nodes active`;
+  document.getElementById("str").textContent=`${an.length} / ${NODES.length} nodes`;
+}
+
+// ─── ZOOM CONTROLS ────────────────────────────────────────────────────────────
+document.getElementById("zIn").addEventListener("click",()=>svg.transition().duration(200).call(zoom.scaleBy,1.3));
+document.getElementById("zOut").addEventListener("click",()=>svg.transition().duration(200).call(zoom.scaleBy,0.77));
+document.getElementById("zReset").addEventListener("click",()=>svg.transition().duration(380).call(zoom.transform,d3.zoomIdentity));
+
+window.addEventListener("resize",()=>{
+  W=gc.clientWidth;H=gc.clientHeight;
+  sim.force("center",d3.forceCenter(W/2,H/2).strength(0.02)).alpha(0.1).restart();
+});
+</script>
+</body>
+</html>

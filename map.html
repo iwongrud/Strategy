@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Overview of Domestic CRAs</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #0d1117; color: #e6edf3;
+    height: 100vh; overflow: hidden; display: flex; flex-direction: column;
+  }
+  header { padding: 14px 24px 12px; border-bottom: 1px solid #21262d; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; background: #161b22; flex-shrink: 0; }
+  .header-left h1 { font-size: 17px; font-weight: 600; color: #e6edf3; letter-spacing: -0.02em; }
+  .header-left p  { font-size: 12px; color: #7d8590; margin-top: 2px; }
+  .moodys-badge { background: #0f6e56; color: #9fe1cb; font-size: 11px; font-weight: 600; padding: 4px 10px; border-radius: 20px; letter-spacing: 0.03em; }
+
+  #stats { display: flex; border-bottom: 1px solid #21262d; background: #161b22; flex-shrink: 0; }
+  .stat { flex: 1; padding: 10px 20px; border-right: 1px solid #21262d; text-align: center; }
+  .stat:last-child { border-right: none; }
+  .stat-val { font-size: 20px; font-weight: 700; color: #e6edf3; line-height: 1; margin-bottom: 3px; }
+  .stat-val.green { color: #1D9E75; }
+  .stat-label { font-size: 11px; color: #7d8590; text-transform: uppercase; letter-spacing: 0.06em; }
+
+  #controls { display: flex; align-items: center; gap: 6px; padding: 8px 16px; border-bottom: 1px solid #21262d; background: #0d1117; flex-wrap: wrap; flex-shrink: 0; }
+  #controls .ctrl-label { font-size: 11px; color: #7d8590; text-transform: uppercase; letter-spacing: 0.06em; margin-right: 4px; }
+  #controls button { font-size: 12px; padding: 4px 11px; border-radius: 6px; border: 1px solid #30363d; background: transparent; color: #8b949e; cursor: pointer; transition: all 0.15s; font-family: inherit; }
+  #controls button:hover  { background: #21262d; color: #e6edf3; border-color: #484f58; }
+  #controls button.active { background: #1f6feb; color: #fff; border-color: #1f6feb; }
+
+  #legend { display: flex; gap: 14px; align-items: center; margin-left: auto; flex-wrap: wrap; }
+  .leg-item { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #8b949e; }
+  .leg-swatch { width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0; }
+  .leg-swatch-outline { width: 13px; height: 13px; border-radius: 3px; flex-shrink: 0; border: 2px solid #c0614a; background: transparent; }
+
+  #search-wrap { position: relative; margin-left: 10px; }
+  #search-input { background: #21262d; border: 1px solid #30363d; border-radius: 6px; color: #e6edf3; font-family: inherit; font-size: 12px; padding: 4px 28px 4px 10px; width: 190px; outline: none; transition: border-color 0.15s; }
+  #search-input::placeholder { color: #484f58; }
+  #search-input:focus { border-color: #58a6ff; }
+  #search-clear { position: absolute; right: 7px; top: 50%; transform: translateY(-50%); color: #484f58; cursor: pointer; font-size: 14px; line-height: 1; display: none; background: none; border: none; padding: 0; }
+  #search-clear:hover { color: #8b949e; }
+  #search-dropdown { position: absolute; top: calc(100% + 4px); left: 0; width: 230px; background: #161b22; border: 1px solid #30363d; border-radius: 8px; z-index: 200; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.6); overflow: hidden; max-height: 220px; overflow-y: auto; }
+  .search-item { padding: 7px 12px; font-size: 13px; color: #c9d1d9; cursor: pointer; display: flex; align-items: center; gap: 8px; transition: background 0.1s; }
+  .search-item:hover, .search-item.active { background: #21262d; color: #e6edf3; }
+  .search-item .si-region { font-size: 10px; color: #484f58; margin-left: auto; background: #21262d; padding: 1px 5px; border-radius: 3px; flex-shrink: 0; }
+  .search-item .si-dot { width: 8px; height: 8px; border-radius: 2px; flex-shrink: 0; }
+  .search-no-results { padding: 10px 12px; font-size: 12px; color: #484f58; }
+
+  #map-wrap { flex: 1; position: relative; background: #0d1117; overflow: hidden; cursor: grab; min-height: 0; }
+  #map-wrap:active { cursor: grabbing; }
+  svg#world { width: 100%; height: 100%; display: block; }
+
+  .country { stroke: #21262d; stroke-width: 0.4px; transition: opacity 0.2s; cursor: pointer; }
+  .country:hover { opacity: 0.72; stroke: #58a6ff; stroke-width: 1px; }
+  .country.has-cra-moodys { fill: #1D9E75; }
+  .country.has-cra-other  { fill: #2056a8; }
+  .country.no-cra         { fill: #21262d; }
+  .country.na-country     { fill: #1D9E75; }
+  .country.greenland-country { fill: #21262d; }
+  .country.target-market  { stroke: #c0614a !important; stroke-width: 2px !important; }
+  .country.target-market:hover { stroke: #d4806c !important; stroke-width: 2.5px !important; opacity: 0.8; }
+  .country.highlighted    { stroke: #f0f6ff !important; stroke-width: 2.5px !important; opacity: 1 !important; }
+
+  #tooltip { position: fixed; pointer-events: none; background: #161b22; border: 1px solid #30363d; border-radius: 8px; padding: 10px 13px; font-size: 13px; color: #e6edf3; max-width: 310px; z-index: 100; display: none; box-shadow: 0 8px 24px rgba(0,0,0,0.5); }
+  .t-country  { font-weight: 600; font-size: 14px; margin-bottom: 6px; color: #e6edf3; }
+  .t-metrics  { display: flex; flex-direction: column; gap: 3px; margin-bottom: 6px; padding: 6px 8px; background: #0d1117; border-radius: 5px; }
+  .t-metric-row { display: flex; align-items: baseline; gap: 5px; font-size: 12px; }
+  .t-metric-label { color: #7d8590; width: 100px; flex-shrink: 0; font-size: 11px; }
+  .t-metric-val   { font-weight: 700; color: #e6edf3; font-size: 13px; }
+  .t-metric-sub   { font-size: 11px; color: #7d8590; }
+  .t-no-data { font-size: 11px; color: #484f58; font-style: italic; }
+  .t-region { font-size: 11px; color: #7d8590; margin-bottom: 5px; }
+  .t-cra    { padding: 3px 0; border-bottom: 1px solid #21262d; font-size: 12px; color: #c9d1d9; }
+  .t-cra:last-child { border-bottom: none; }
+  .t-more   { font-size: 11px; color: #7d8590; margin-top: 4px; }
+  .t-rec-tag  { display: inline-block; background: #2a1810; color: #d4806c; font-size: 10px; font-weight: 600; padding: 2px 7px; border-radius: 3px; border: 1px solid #c0614a; margin-bottom: 6px; }
+  .t-rec-text { font-size: 12px; color: #a0b0c0; line-height: 1.5; margin-top: 4px; border-top: 1px solid #21262d; padding-top: 6px; }
+
+  .aff-badge { display: inline-block; font-size: 10px; padding: 1px 5px; border-radius: 3px; margin-left: 5px; vertical-align: middle; font-weight: 600; }
+  .aff-moodys { background: #0d3026; color: #56d364; }
+  .aff-fitch  { background: #3d1a00; color: #ffa657; }
+  .aff-sp     { background: #0d2149; color: #79c0ff; }
+  .aff-ind    { background: #1c2128; color: #8b949e; }
+
+  #zoom-controls { position: absolute; bottom: 16px; right: 16px; display: flex; flex-direction: column; gap: 4px; z-index: 10; }
+  #zoom-controls button { width: 30px; height: 30px; font-size: 16px; border: 1px solid #30363d; background: #161b22; color: #e6edf3; border-radius: 6px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-family: inherit; transition: background 0.15s; }
+  #zoom-controls button:hover { background: #21262d; }
+
+  #panel { position: absolute; top: 12px; left: 12px; width: 310px; max-height: calc(100% - 24px); background: #161b22; border: 1px solid #30363d; border-radius: 10px; overflow: hidden; box-shadow: 0 8px 32px rgba(0,0,0,0.5); z-index: 20; display: none; flex-direction: column; }
+  #panel.open { display: flex; }
+  #panel-header { padding: 12px 14px 10px; border-bottom: 1px solid #21262d; display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; background: #0d1117; flex-shrink: 0; }
+  #panel-title  { font-size: 15px; font-weight: 600; color: #e6edf3; line-height: 1.3; }
+  #panel-region-badge { display: inline-block; font-size: 10px; color: #7d8590; background: #21262d; padding: 2px 7px; border-radius: 10px; margin-top: 3px; }
+  #close-panel { background: none; border: none; color: #7d8590; cursor: pointer; font-size: 20px; line-height: 1; padding: 0; flex-shrink: 0; }
+  #close-panel:hover { color: #e6edf3; }
+  #panel-rec { padding: 10px 14px; border-bottom: 1px solid #21262d; background: #1c1310; flex-shrink: 0; display: none; }
+  .panel-rec-tag  { display: inline-block; background: #2a1810; color: #d4806c; font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 3px; border: 1px solid #c0614a; margin-bottom: 6px; }
+  .panel-rec-text { font-size: 12px; color: #c0c8d0; line-height: 1.55; }
+  #panel-metrics { padding: 10px 14px; border-bottom: 1px solid #21262d; background: #0d1117; flex-shrink: 0; }
+  .panel-metrics-label { font-size: 11px; color: #7d8590; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px; }
+  .panel-metrics-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .panel-metric-card { background: #161b22; border: 0.5px solid #30363d; border-radius: 6px; padding: 7px 9px; }
+  .panel-metric-card .pmc-label { font-size: 10px; color: #7d8590; margin-bottom: 3px; }
+  .panel-metric-card .pmc-val   { font-size: 14px; font-weight: 700; color: #e6edf3; line-height: 1.2; }
+  .panel-metric-card .pmc-sub   { font-size: 10px; color: #7d8590; margin-top: 1px; }
+  .panel-no-data { font-size: 11px; color: #484f58; font-style: italic; }
+  #panel-body { overflow-y: auto; padding: 6px 0; flex: 1; }
+  .cra-row { padding: 8px 14px; border-bottom: 1px solid #21262d; }
+  .cra-row:last-child { border-bottom: none; }
+  .cra-name { font-size: 13px; font-weight: 500; color: #e6edf3; margin-bottom: 3px; }
+  .cra-meta { font-size: 11px; color: #7d8590; line-height: 1.4; }
+  .badge { display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 5px; vertical-align: middle; }
+  .badge-moodys { background: #0d3026; color: #56d364; }
+  .badge-fitch  { background: #3d1a00; color: #ffa657; }
+  .badge-sp     { background: #0d2149; color: #79c0ff; }
+  .badge-ind    { background: #1c2128; color: #8b949e; }
+  #no-cra-msg { padding: 14px; font-size: 13px; color: #7d8590; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="header-left">
+    <h1>Overview of Domestic CRAs</h1>
+    <p>56 countries &nbsp;&middot;&nbsp; 141 local CRAs &nbsp;&middot;&nbsp; GDP &amp; debt issuance: IMF WEO Oct 2025 / BIS / OECD GDR 2025</p>
+  </div>
+  <span class="moodys-badge">Moody's Intelligence</span>
+</header>
+
+<div id="stats">
+  <div class="stat"><div class="stat-val">56</div><div class="stat-label">Countries w/ CRAs</div></div>
+  <div class="stat"><div class="stat-val">141</div><div class="stat-label">Total Local CRAs</div></div>
+  <div class="stat"><div class="stat-val green">26</div><div class="stat-label">Moody's Presence</div></div>
+  <div class="stat"><div class="stat-val">3</div><div class="stat-label">Regions</div></div>
+</div>
+
+<div id="controls">
+  <span class="ctrl-label">Filter:</span>
+  <button class="active" id="btn-all"    onclick="setFilter('all')">All</button>
+  <button id="btn-moodys" onclick="setFilter('moodys')">Moody's Only</button>
+  <button id="btn-fitch"  onclick="setFilter('fitch')">Fitch Only</button>
+  <button id="btn-sp"     onclick="setFilter('sp')">S&amp;P Only</button>
+  <button id="btn-apac"   onclick="setFilter('APAC')">APAC</button>
+  <button id="btn-emea"   onclick="setFilter('EMEA')">EMEA</button>
+  <button id="btn-latam"  onclick="setFilter('LATAM')">LATAM</button>
+  <div id="search-wrap">
+    <input id="search-input" type="text" placeholder="&#128269; Search country..." autocomplete="off" />
+    <button id="search-clear" onclick="clearSearch()" title="Clear">&#215;</button>
+    <div id="search-dropdown"></div>
+  </div>
+  <div id="legend">
+    <div class="leg-item"><span class="leg-swatch" style="background:#1D9E75;"></span>Moody's Presence</div>
+    <div class="leg-item"><span class="leg-swatch" style="background:#2056a8;"></span>Markets w/o Moody's</div>
+    <div class="leg-item"><span class="leg-swatch" style="background:#21262d;border:1px solid #484f58;"></span>No local CRA</div>
+    <div class="leg-item"><span class="leg-swatch-outline"></span>Potential New Markets</div>
+  </div>
+</div>
+
+<div id="map-wrap">
+  <svg id="world"></svg>
+  <div id="zoom-controls">
+    <button onclick="zoomIn()">+</button>
+    <button onclick="zoomOut()">&#8722;</button>
+    <button onclick="resetZoom()" style="font-size:13px;">&#8962;</button>
+  </div>
+  <div id="panel">
+    <div id="panel-header">
+      <div><div id="panel-title"></div><div id="panel-region-badge"></div></div>
+      <button id="close-panel" onclick="closePanel()">&#215;</button>
+    </div>
+    <div id="panel-rec"></div>
+    <div id="panel-metrics"></div>
+    <div id="panel-body"></div>
+  </div>
+  <div id="tooltip"></div>
+</div>
+
+<script>
+const CRA_DATA = {"Australia": {"region": "APAC", "cras": [{"name": "Australia Ratings", "rank": "", "affiliation": "", "commentary": "Doesn't seem like they provide ratings anymore; only credit risk consulting and advisory services"}]}, "Bangladesh": {"region": "APAC", "cras": [{"name": "CRAB (Credit Rating Agency of Bangladesh)", "rank": "1", "affiliation": "Moody's", "commentary": "TSA with ICRA"}, {"name": "CRISL (Credit Rating Information & Services)", "rank": "2", "affiliation": "", "commentary": "Oldest CRA in Bangladesh; BSEC-registered"}, {"name": "Emerging Credit Rating", "rank": "", "affiliation": "", "commentary": ""}, {"name": "National Credit Rating", "rank": "", "affiliation": "", "commentary": ""}, {"name": "The Bangladesh Rating Agency Limited (BDRAL)", "rank": "", "affiliation": "", "commentary": ""}, {"name": "Alpha Credit Rating Limited", "rank": "", "affiliation": "", "commentary": ""}, {"name": "ARGUS Credit Rating Services Ltd", "rank": "", "affiliation": "", "commentary": ""}, {"name": "WASO Credit Rating Company (BD) Limited", "rank": "", "affiliation": "", "commentary": ""}]}, "China": {"region": "APAC", "cras": [{"name": "CCXI (China Chengxin International)", "rank": "1", "affiliation": "Moody's", "commentary": "~30% stake (Moody's)"}, {"name": "China Lianhe Credit Ratings", "rank": "2", "affiliation": "Fitch", "commentary": "Fitch minority stake (49% historically via JV)"}, {"name": "Dagong Global Credit Rating", "rank": "3", "affiliation": "", "commentary": ""}, {"name": "CSPI Ratings (CS Pengyuan)", "rank": "4", "affiliation": "", "commentary": ""}]}, "India": {"region": "APAC", "cras": [{"name": "CRISIL Ratings", "rank": "1", "affiliation": "S&P", "commentary": "~67% owned by S&P Global"}, {"name": "ICRA Limited", "rank": "2", "affiliation": "Moody's", "commentary": "~51% stake (Moody's)"}, {"name": "CARE Ratings", "rank": "3", "affiliation": "", "commentary": ""}, {"name": "India Ratings and Research (Ind-Ra)", "rank": "4", "affiliation": "Fitch", "commentary": "100% owned by Fitch Group"}, {"name": "Brickwork Ratings", "rank": "5", "affiliation": "", "commentary": ""}, {"name": "Acuite Ratings & Research", "rank": "6", "affiliation": "", "commentary": ""}]}, "Indonesia": {"region": "APAC", "cras": [{"name": "PEFINDO", "rank": "1", "affiliation": "S&P / CRISIL", "commentary": "~15% stake (S&P Global, since 2023)"}, {"name": "Kredit Rating indonesia", "rank": "2", "affiliation": "", "commentary": ""}, {"name": "Fitch Ratings Indonesia", "rank": "", "affiliation": "Fitch", "commentary": ""}]}, "Japan": {"region": "APAC", "cras": [{"name": "JCR (Japan Credit Rating Agency)", "rank": "1", "affiliation": "", "commentary": ""}, {"name": "R&I (Rating and Investment Information)", "rank": "2", "affiliation": "", "commentary": ""}]}, "Malaysia": {"region": "APAC", "cras": [{"name": "RAM Ratings", "rank": "1", "affiliation": "S&P & Fitch", "commentary": ""}, {"name": "MARC (Malaysian Rating Corporation)", "rank": "2", "affiliation": "Moody's", "commentary": "19.9% stake by Moody's"}]}, "Mongolia": {"region": "APAC", "cras": [{"name": "MIRA \u2013 Mongolian Credit Rating Agency", "rank": "", "affiliation": "", "commentary": ""}]}, "Pakistan": {"region": "APAC", "cras": [{"name": "PACRA (Pakistan Credit Rating Agency)", "rank": "1", "affiliation": "", "commentary": "JCR affiliate"}, {"name": "VIS Credit Rating (fka JCR-VIS)", "rank": "2", "affiliation": "", "commentary": ""}]}, "Philippines": {"region": "APAC", "cras": [{"name": "PhilRatings", "rank": "1", "affiliation": "", "commentary": ""}]}, "South Korea": {"region": "APAC", "cras": [{"name": "KIS (Korea Investors Service)", "rank": "1", "affiliation": "Moody's", "commentary": "100% owned by Moody's"}, {"name": "Korea Ratings", "rank": "2", "affiliation": "Fitch", "commentary": "Fitch affiliate"}, {"name": "NICE Rating", "rank": "", "affiliation": "S&P", "commentary": ""}]}, "Sri Lanka": {"region": "APAC", "cras": [{"name": "Lanka Rating Agency", "rank": "", "affiliation": "", "commentary": "Technical partner: PACRA (Pakistan Credit Rating Agency)"}, {"name": "ICRA Lanka Limited", "rank": "", "affiliation": "Moody's / ICRA", "commentary": ""}]}, "Vietnam": {"region": "APAC", "cras": [{"name": "VIS Rating", "rank": "", "affiliation": "Moody's", "commentary": "49% stake (Moody's)"}, {"name": "FiinRatings", "rank": "1", "affiliation": "S&P", "commentary": "43% stake (S&P)"}, {"name": "Saigon Ratings", "rank": "", "affiliation": "", "commentary": ""}, {"name": "S&I ratings Joint Stock Company", "rank": "", "affiliation": "", "commentary": ""}]}, "Taiwan": {"region": "APAC", "cras": [{"name": "Taiwan Ratings Corporation (TRC)", "rank": "1", "affiliation": "S&P", "commentary": "S&P subsidiary (49% originally; now majority)"}]}, "Thailand": {"region": "APAC", "cras": [{"name": "TRIS Rating", "rank": "1", "affiliation": "S&P", "commentary": "49% stake (S&P)"}]}, "Egypt": {"region": "EMEA", "cras": [{"name": "MERIS Ratings", "rank": "1", "affiliation": "Moody's", "commentary": "0.75"}, {"name": "rate Credit Rating Agency", "rank": "", "affiliation": "", "commentary": ""}]}, "Bulgaria": {"region": "EMEA", "cras": [{"name": "BCRA (Bulgarian Credit Rating Agency)", "rank": "1", "affiliation": "", "commentary": "Acquired by a Swiss private investor in 2021, with an expanded focus on CEE & SEE markets"}]}, "Cyprus": {"region": "EMEA", "cras": [{"name": "Capital Intelligence Ratings", "rank": "", "affiliation": "", "commentary": "Cyprus-based, MENA-focuses, ESMA registered, cover UAE"}]}, "Israel": {"region": "EMEA", "cras": [{"name": "Midroog", "rank": "1", "affiliation": "Moody's", "commentary": "~51% owned by Moody's (majority subsidiary)"}, {"name": "S&P Maalot", "rank": "2", "affiliation": "S&P / CRISIL", "commentary": "S&P subsidiary"}]}, "Germany": {"region": "EMEA", "cras": [{"name": "Creditreform Rating", "rank": "1", "affiliation": "", "commentary": ""}, {"name": "Scope Ratings", "rank": "2", "affiliation": "", "commentary": ""}]}, "Kenya": {"region": "EMEA", "cras": [{"name": "GCR Ratings", "rank": "1", "affiliation": "Moody's", "commentary": "Subsidiary"}, {"name": "Metropol Credit Rating Agency", "rank": "", "affiliation": "", "commentary": ""}, {"name": "Agusto & Co.", "rank": "", "affiliation": "", "commentary": "Subsidiary"}]}, "Italy": {"region": "EMEA", "cras": [{"name": "Cerved Rating Agency", "rank": "1", "affiliation": "", "commentary": ""}, {"name": "CRIF Ratings", "rank": "2", "affiliation": "", "commentary": ""}, {"name": "modefinance", "rank": "3", "affiliation": "", "commentary": ""}]}, "Ivory Coast": {"region": "EMEA", "cras": [{"name": "Bloomfield Investment", "rank": "", "affiliation": "", "commentary": ""}]}, "Nigeria": {"region": "EMEA", "cras": [{"name": "GCR Ratings", "rank": "1", "affiliation": "Moody's", "commentary": "Subsidiary"}, {"name": "Agusto & Co.", "rank": "2", "affiliation": "", "commentary": ""}, {"name": "DataPro Limited", "rank": "", "affiliation": "", "commentary": "Fast\u2011growing, technology\u2011driven CRA"}, {"name": "Pan\u2011African Credit Rating Agency", "rank": "", "affiliation": "", "commentary": ""}]}, "Kuwait": {"region": "EMEA", "cras": [{"name": "Capital Standards Rating (CSR)", "rank": "1", "affiliation": "", "commentary": ""}]}, "Senegal": {"region": "EMEA", "cras": [{"name": "WARA (GCR)", "rank": "1", "affiliation": "Moody's", "commentary": "65% by GCR"}]}, "Poland": {"region": "EMEA", "cras": [{"name": "EuroRating", "rank": "1", "affiliation": "", "commentary": "Voluntarily withdrew ESMA registration in June 2024; only issue private ratings now"}]}, "Russia": {"region": "EMEA", "cras": [{"name": "ACRA", "rank": "1", "affiliation": "", "commentary": "Created after the withdrawal of Western CRAs from Russia"}, {"name": "Expert RA", "rank": "2", "affiliation": "", "commentary": ""}, {"name": "NRA (National Rating Agency)", "rank": "3", "affiliation": "", "commentary": ""}, {"name": "National Credit Ratings (NCR)", "rank": "4", "affiliation": "", "commentary": ""}]}, "Saudi Arabia": {"region": "EMEA", "cras": [{"name": "Tassnief", "rank": "1", "affiliation": "", "commentary": ""}, {"name": "Financial Analytics Company (RATING)", "rank": "2", "affiliation": "", "commentary": ""}]}, "South Africa": {"region": "EMEA", "cras": [{"name": "GCR Ratings", "rank": "1", "affiliation": "Moody's", "commentary": "100% owned by Moody's"}, {"name": "Sovereign Africa Ratings", "rank": "", "affiliation": "", "commentary": ""}, {"name": "CARE Ratings South Africa", "rank": "", "affiliation": "", "commentary": ""}]}, "Argentina": {"region": "LATAM", "cras": [{"name": "Moody's Local Argentina", "rank": "2", "affiliation": "Moody's", "commentary": ""}, {"name": "FIX SCR S.A.", "rank": "1", "affiliation": "Fitch", "commentary": "30% owned by Fitch"}, {"name": "Evaluadora Latinoamericana", "rank": "3", "affiliation": "", "commentary": ""}]}, "Spain": {"region": "EMEA", "cras": [{"name": "EthiFinance", "rank": "1", "affiliation": "", "commentary": "Merger of Axesor Rating (Spain) and Spreadresearch/Qivalio (France) under the EthiFinance brand"}, {"name": "Inbonis", "rank": "2", "affiliation": "", "commentary": "SME focused"}]}, "Tunisia": {"region": "EMEA", "cras": [{"name": "PBR Ratings", "rank": "", "affiliation": "", "commentary": ""}]}, "Turkey": {"region": "EMEA", "cras": [{"name": "JCR Eurasia Rating (JCR-ER)", "rank": "1", "affiliation": "", "commentary": "JCR Minority stake"}, {"name": "Saha Rating (TURKRATING)", "rank": "2", "affiliation": "", "commentary": ""}, {"name": "DRC Rating", "rank": "", "affiliation": "", "commentary": ""}]}, "UK": {"region": "EMEA", "cras": [{"name": "ARC Ratings", "rank": "", "affiliation": "", "commentary": ""}]}, "Uganda": {"region": "EMEA", "cras": [{"name": "ICRA Rating Agency Limited", "rank": "1", "affiliation": "", "commentary": ""}]}, "Ukraine": {"region": "EMEA", "cras": [{"name": "Credit-Rating (Ukraine)", "rank": "1", "affiliation": "", "commentary": "Merged with IBI\u2011Rating in December 2025"}, {"name": "Expert Rating", "rank": "2", "affiliation": "", "commentary": ""}, {"name": "Rurik", "rank": "3", "affiliation": "", "commentary": ""}]}, "Uzbekistan": {"region": "EMEA", "cras": [{"name": "Ahbor Rating", "rank": "1", "affiliation": "", "commentary": ""}]}, "Zimbabwe": {"region": "EMEA", "cras": [{"name": "International Credit Rating Agency (Private) Limited", "rank": "", "affiliation": "", "commentary": ""}]}, "Bolivia": {"region": "LATAM", "cras": [{"name": "Moody's Local Bolivia", "rank": "", "affiliation": "Moody's", "commentary": ""}, {"name": "AESA Ratings", "rank": "", "affiliation": "", "commentary": ""}, {"name": "Pacific Credit Rating (PCR)", "rank": "", "affiliation": "", "commentary": ""}]}, "Brazil": {"region": "LATAM", "cras": [{"name": "Moody's Local Brazil", "rank": "2", "affiliation": "Moody's", "commentary": ""}, {"name": "S&P Brazil", "rank": "3", "affiliation": "S&P", "commentary": ""}, {"name": "Fitch Ratings Brasil", "rank": "1", "affiliation": "Fitch", "commentary": ""}, {"name": "Austin Rating", "rank": "4", "affiliation": "Independent", "commentary": ""}, {"name": "SR Ratings", "rank": "", "affiliation": "", "commentary": ""}, {"name": "Liberum Ratings", "rank": "", "affiliation": "", "commentary": ""}]}, "Chile": {"region": "LATAM", "cras": [{"name": "Moody's Local Chile", "rank": "2", "affiliation": "Moody's", "commentary": ""}, {"name": "Feller Rate", "rank": "1", "affiliation": "", "commentary": ""}, {"name": "Humphreys (Clasificadora de Riesgo)", "rank": "", "affiliation": "S&P", "commentary": "S&P affiliate"}]}, "Costa Rica": {"region": "LATAM", "cras": [{"name": "Moody's Local Costa Rica", "rank": "1", "affiliation": "Moody's", "commentary": ""}, {"name": "Fitch", "rank": "2", "affiliation": "", "commentary": ""}, {"name": "Pacific Credit Rating (PCR)", "rank": "3", "affiliation": "", "commentary": ""}]}, "Colombia": {"region": "LATAM", "cras": [{"name": "BRC Ratings", "rank": "1", "affiliation": "S&P", "commentary": "S&P affiliate (S&P branded)"}, {"name": "Value and Risk Rating (VRR)", "rank": "2", "affiliation": "", "commentary": ""}]}, "Dominican Republic": {"region": "LATAM", "cras": [{"name": "Moody's Local DR", "rank": "", "affiliation": "Moody's", "commentary": ""}, {"name": "Fitch", "rank": "", "affiliation": "", "commentary": ""}, {"name": "Pacific Credit Rating (PCR)", "rank": "", "affiliation": "", "commentary": ""}, {"name": "Feller Rate", "rank": "", "affiliation": "", "commentary": ""}]}, "El Salvador": {"region": "LATAM", "cras": [{"name": "Moody's Local El Salvador", "rank": "", "affiliation": "Moody's", "commentary": ""}, {"name": "Pacific Credit Rating (PCR)", "rank": "", "affiliation": "", "commentary": ""}, {"name": "Fitch", "rank": "", "affiliation": "Fitch", "commentary": ""}, {"name": "Global Ventures", "rank": "", "affiliation": "", "commentary": ""}, {"name": "Zumma", "rank": "", "affiliation": "", "commentary": ""}]}, "Ecuador": {"region": "LATAM", "cras": [{"name": "BankWatch Ratings", "rank": "1", "affiliation": "", "commentary": ""}, {"name": "GlobalRatings C\u00eda. Ltda", "rank": "3", "affiliation": "", "commentary": ""}, {"name": "Class Internacional Rating", "rank": "2", "affiliation": "", "commentary": ""}]}, "Guatemala": {"region": "LATAM", "cras": [{"name": "Moody's Local Guatemala", "rank": "", "affiliation": "Moody's", "commentary": ""}, {"name": "Pacific Credit Rating (PCR)", "rank": "", "affiliation": "", "commentary": ""}, {"name": "Fitch", "rank": "", "affiliation": "Fitch", "commentary": ""}]}, "Honduras": {"region": "LATAM", "cras": [{"name": "Moody's Local Honduras", "rank": "", "affiliation": "Moody's", "commentary": ""}, {"name": "Fitch Honduras", "rank": "", "affiliation": "Fitch", "commentary": ""}]}, "Mexico": {"region": "LATAM", "cras": [{"name": "Moody's Local Mexico", "rank": "", "affiliation": "Moody's", "commentary": ""}, {"name": "HR Ratings", "rank": "2", "affiliation": "", "commentary": ""}, {"name": "Pacific Credit Rating (PCR)", "rank": "3", "affiliation": "", "commentary": ""}]}, "Nicaragua": {"region": "LATAM", "cras": [{"name": "Moody's Local Nicaragua", "rank": "", "affiliation": "Moody's", "commentary": ""}]}, "Panama": {"region": "LATAM", "cras": [{"name": "Moody's Local Panama", "rank": "", "affiliation": "Moody's", "commentary": ""}, {"name": "Fitch", "rank": "", "affiliation": "", "commentary": ""}, {"name": "Pacific Credit Rating (PCR)", "rank": "", "affiliation": "", "commentary": ""}, {"name": "AM Best", "rank": "", "affiliation": "", "commentary": ""}]}, "Peru": {"region": "LATAM", "cras": [{"name": "Moody's Local Peru", "rank": "1", "affiliation": "Moody's", "commentary": ""}, {"name": "Apoyo & Asociados", "rank": "2", "affiliation": "Fitch", "commentary": "Fitch affiliate"}, {"name": "Pacific Credit Rating (PCR)", "rank": "", "affiliation": "", "commentary": ""}, {"name": "JCR Latinoam\u00e9rica Empresa", "rank": "3", "affiliation": "", "commentary": "JCR Japan affiliate"}]}, "Paraguay": {"region": "LATAM", "cras": [{"name": "FIX SCR S.A.", "rank": "1", "affiliation": "Fitch", "commentary": "Affiliate of Fitch Group"}, {"name": "Feller Rate", "rank": "", "affiliation": "", "commentary": ""}, {"name": "S&R", "rank": "", "affiliation": "", "commentary": ""}]}, "Uruguay": {"region": "LATAM", "cras": [{"name": "Moody's Local UY", "rank": "", "affiliation": "Moody's", "commentary": ""}, {"name": "FIX SCR S.A.", "rank": "2", "affiliation": "Fitch", "commentary": "Affiliate of Fitch Group"}, {"name": "CARE Calificadora de Riesgo", "rank": "3", "affiliation": "", "commentary": ""}]}, "Trinidad & Tobago": {"region": "LATAM", "cras": [{"name": "CariCRIS", "rank": "1", "affiliation": "", "commentary": "Caribbean focused"}]}};
+const GDP_DATA = {"United States": {"growth": 2.1, "gdp": 31820.0}, "China": {"growth": 4.2, "gdp": 20650.0}, "Germany": {"growth": 0.9, "gdp": 5330.0}, "India": {"growth": 6.2, "gdp": 4510.0}, "Japan": {"growth": 0.6, "gdp": 4460.0}, "United Kingdom": {"growth": 1.3, "gdp": 4230.0}, "France": {"growth": 0.9, "gdp": 3560.0}, "Italy": {"growth": 0.8, "gdp": 2700.0}, "Russia": {"growth": 1.0, "gdp": 2510.0}, "Canada": {"growth": 1.5, "gdp": 2420.0}, "Brazil": {"growth": 1.9, "gdp": 2290.0}, "South Sudan, Republic of": {"growth": 22.4, "gdp": 2040.0}, "Mexico": {"growth": 1.5, "gdp": 2030.0}, "Australia": {"growth": 2.1, "gdp": 1950.0}, "South Korea": {"growth": 1.8, "gdp": 1940.0}, "Turkey": {"growth": 3.7, "gdp": 1580.0}, "Indonesia": {"growth": 4.9, "gdp": 1550.0}, "Netherlands": {"growth": 1.2, "gdp": 1410.0}, "Saudi Arabia": {"growth": 4.0, "gdp": 1320.0}, "Poland": {"growth": 3.1, "gdp": 1110.0}, "Switzerland": {"growth": 1.3, "gdp": 1070.0}, "Taiwan": {"growth": 2.1, "gdp": 971.45}, "Belgium": {"growth": 1.0, "gdp": 761.17}, "Ireland": {"growth": 1.3, "gdp": 750.11}, "Sweden": {"growth": 1.9, "gdp": 711.5}, "Argentina": {"growth": 4.0, "gdp": 667.92}, "Israel": {"growth": 3.9, "gdp": 666.41}, "Singapore": {"growth": 1.8, "gdp": 606.23}, "Austria": {"growth": 0.8, "gdp": 604.2}, "United Arab Emirates": {"growth": 5.0, "gdp": 601.16}, "Thailand": {"growth": 1.6, "gdp": 561.51}, "Norway": {"growth": 1.6, "gdp": 547.69}, "Philippines": {"growth": 5.7, "gdp": 533.92}, "Bangladesh": {"growth": 4.9, "gdp": 519.29}, "Vietnam": {"growth": 5.6, "gdp": 511.06}, "Malaysia": {"growth": 4.0, "gdp": 505.36}, "Denmark": {"growth": 2.2, "gdp": 500.05}, "Colombia": {"growth": 2.3, "gdp": 462.25}, "Hong Kong SAR": {"growth": 2.1, "gdp": 446.65}, "Romania": {"growth": 1.4, "gdp": 444.81}, "South Africa": {"growth": 1.2, "gdp": 443.64}, "Czech Republic": {"growth": 2.0, "gdp": 417.13}, "Pakistan": {"growth": 3.6, "gdp": 410.5}, "Egypt": {"growth": 4.5, "gdp": 399.51}, "Iran": {"growth": 1.1, "gdp": 375.64}, "Portugal": {"growth": 2.1, "gdp": 364.53}, "Chile": {"growth": 2.0, "gdp": 363.3}, "Finland": {"growth": 1.3, "gdp": 335.53}, "Nigeria": {"growth": 4.2, "gdp": 334.34}, "Peru": {"growth": 2.7, "gdp": 326.61}, "Kazakhstan": {"growth": 4.8, "gdp": 319.77}, "Greece": {"growth": 2.0, "gdp": 304.84}, "Algeria": {"growth": 2.9, "gdp": 284.98}, "New Zealand": {"growth": 2.2, "gdp": 280.55}, "Iraq": {"growth": 3.6, "gdp": 273.91}, "Hungary": {"growth": 2.1, "gdp": 269.92}, "Qatar": {"growth": 6.1, "gdp": 239.14}, "Ukraine": {"growth": 4.5, "gdp": 224.26}, "Morocco": {"growth": 4.2, "gdp": 196.12}, "Slovak Republic": {"growth": 1.7, "gdp": 167.73}, "Kuwait": {"growth": 3.9, "gdp": 162.9}, "Uzbekistan": {"growth": 6.0, "gdp": 159.2}, "Bulgaria": {"growth": 3.1, "gdp": 142.2}, "Kenya": {"growth": 4.9, "gdp": 140.87}, "Dominican Republic": {"growth": 4.5, "gdp": 138.34}, "Ecuador": {"growth": 2.0, "gdp": 134.71}, "Guatemala": {"growth": 3.6, "gdp": 129.47}, "Puerto Rico": {"growth": -0.1, "gdp": 129.19}, "Ethiopia": {"growth": 7.1, "gdp": 125.74}, "Ghana": {"growth": 4.8, "gdp": 113.49}, "Croatia": {"growth": 2.7, "gdp": 113.13}, "Serbia": {"growth": 3.6, "gdp": 112.11}, "Ivory Coast": {"growth": 6.4, "gdp": 111.45}, "Angola": {"growth": 2.1, "gdp": 109.86}, "Costa Rica": {"growth": 3.3, "gdp": 109.14}, "Oman": {"growth": 4.0, "gdp": 108.91}, "Luxembourg": {"growth": 2.1, "gdp": 107.76}, "Lithuania": {"growth": 2.9, "gdp": 104.65}, "Sri Lanka": {"growth": 5.0, "gdp": 98.96}, "Panama": {"growth": 4.0, "gdp": 95.91}, "Tanzania": {"growth": 6.3, "gdp": 95.35}, "Uruguay": {"growth": 2.4, "gdp": 90.64}, "Belarus": {"growth": 1.4, "gdp": 90.56}, "Congo, Dem. Rep. of the": {"growth": 5.3, "gdp": 88.13}, "Slovenia": {"growth": 2.3, "gdp": 85.74}, "Azerbaijan": {"growth": 2.5, "gdp": 80.02}, "Venezuela": {"growth": -3.0, "gdp": 79.92}, "Turkmenistan": {"growth": 2.3, "gdp": 76.9}, "Uganda": {"growth": 7.6, "gdp": 72.46}, "Cameroon": {"growth": 4.1, "gdp": 67.52}, "Myanmar": {"growth": 3.0, "gdp": 65.17}, "Tunisia": {"growth": 2.1, "gdp": 60.43}, "Jordan": {"growth": 2.9, "gdp": 59.29}, "Bolivia": {"growth": 0.6, "gdp": 57.0}, "Zimbabwe": {"growth": 4.6, "gdp": 55.43}, "Macao SAR": {"growth": 2.8, "gdp": 54.94}, "Latvia": {"growth": 2.2, "gdp": 52.25}, "Paraguay": {"growth": 3.7, "gdp": 51.67}, "Cambodia": {"growth": 4.0, "gdp": 51.51}, "Estonia": {"growth": 1.5, "gdp": 51.04}, "Bahrain": {"growth": 3.3, "gdp": 49.19}, "Libya": {"growth": 4.2, "gdp": 49.16}, "Nepal": {"growth": 5.2, "gdp": 49.11}, "Iceland": {"growth": 2.3, "gdp": 43.4}, "Cyprus": {"growth": 2.8, "gdp": 43.16}, "Honduras": {"growth": 3.5, "gdp": 40.82}, "Georgia": {"growth": 5.3, "gdp": 40.18}, "Senegal": {"growth": 3.0, "gdp": 39.99}, "Sudan": {"growth": 9.5, "gdp": 39.47}, "El Salvador": {"growth": 2.5, "gdp": 37.98}, "Bosnia and Herzegovina": {"growth": 2.7, "gdp": 36.24}, "Zambia": {"growth": 6.4, "gdp": 33.95}, "Papua New Guinea": {"growth": 3.5, "gdp": 33.46}, "Albania": {"growth": 3.6, "gdp": 32.41}, "Haiti": {"growth": -1.2, "gdp": 31.1}, "Guinea": {"growth": 10.5, "gdp": 30.92}, "Burkina Faso": {"growth": 4.8, "gdp": 30.71}, "Malta": {"growth": 3.9, "gdp": 30.44}, "Armenia": {"growth": 4.9, "gdp": 29.08}, "Mali": {"growth": 5.4, "gdp": 28.48}, "Guyana": {"growth": 23.0, "gdp": 27.49}, "Benin": {"growth": 6.7, "gdp": 27.45}, "Trinidad & Tobago": {"growth": 1.2, "gdp": 26.76}, "Mongolia": {"growth": 5.5, "gdp": 26.52}, "Mozambique": {"growth": 3.5, "gdp": 26.51}, "Niger": {"growth": 6.7, "gdp": 26.11}, "Jamaica": {"growth": 1.5, "gdp": 24.13}, "Chad": {"growth": 3.6, "gdp": 23.56}, "Gabon": {"growth": 2.6, "gdp": 22.73}, "Nicaragua": {"growth": 2.9, "gdp": 21.86}, "Kyrgyz Republic": {"growth": 5.3, "gdp": 21.56}, "Madagascar": {"growth": 4.3, "gdp": 21.09}, "Moldova": {"growth": 2.2, "gdp": 21.02}, "North Macedonia": {"growth": 3.2, "gdp": 20.75}, "Botswana": {"growth": 2.3, "gdp": 20.71}, "Tajikistan": {"growth": 5.5, "gdp": 18.94}, "Malawi": {"growth": 2.7, "gdp": 17.86}, "Lao P.D.R.": {"growth": 2.5, "gdp": 17.78}, "Yemen": {"growth": 0.0, "gdp": 17.24}, "Congo, Republic of": {"growth": 2.8, "gdp": 16.95}, "Bahamas, The": {"growth": 2.1, "gdp": 16.84}, "Mauritius": {"growth": 3.4, "gdp": 16.76}, "Brunei Darussalam": {"growth": 2.4, "gdp": 16.46}, "Namibia": {"growth": 3.8, "gdp": 16.1}, "Rwanda": {"growth": 7.5, "gdp": 15.47}, "Equatorial Guinea": {"growth": 0.5, "gdp": 14.1}, "Kosovo": {"growth": 4.0, "gdp": 14.1}, "Somalia": {"growth": 3.3, "gdp": 13.91}, "Mauritania": {"growth": 4.3, "gdp": 12.85}, "Togo": {"growth": 5.5, "gdp": 12.18}, "Montenegro": {"growth": 3.2, "gdp": 10.23}, "Liechtenstein": {"growth": 1.5, "gdp": 10.12}, "Sierra Leone": {"growth": 4.9, "gdp": 9.3}, "Burundi": {"growth": 4.1, "gdp": 9.21}, "Maldives": {"growth": 4.5, "gdp": 8.22}, "Barbados": {"growth": 2.1, "gdp": 7.94}, "Fiji": {"growth": 3.1, "gdp": 6.7}, "Spain": {"growth": 2.0, "gdp": 6.03}, "Liberia": {"growth": 5.4, "gdp": 5.59}, "Eswatini": {"growth": 4.6, "gdp": 5.5}, "Djibouti": {"growth": 6.0, "gdp": 5.0}, "Suriname": {"growth": 3.7, "gdp": 4.5}, "Andorra": {"growth": 1.6, "gdp": 4.72}, "Aruba": {"growth": 2.2, "gdp": 4.47}, "Bhutan": {"growth": 7.4, "gdp": 3.77}, "Central African Republic": {"growth": 3.3, "gdp": 3.71}, "Belize": {"growth": 2.4, "gdp": 3.44}, "Cabo Verde": {"growth": 4.8, "gdp": 3.14}, "Saint Lucia": {"growth": 2.1, "gdp": 2.77}, "Guinea-Bissau": {"growth": 5.0, "gdp": 2.76}, "Gambia, The": {"growth": 5.1, "gdp": 2.67}, "Lesotho": {"growth": 1.1, "gdp": 2.47}, "Antigua and Barbuda": {"growth": 2.5, "gdp": 2.46}, "San Marino": {"growth": 1.3, "gdp": 2.39}, "Seychelles": {"growth": 3.2, "gdp": 2.25}, "Timor-Leste": {"growth": 3.3, "gdp": 2.21}, "Solomon Islands": {"growth": 2.8, "gdp": 2.05}, "Comoros": {"growth": 4.0, "gdp": 1.77}, "Grenada": {"growth": 3.4, "gdp": 1.52}, "Samoa": {"growth": 3.2, "gdp": 1.33}, "Saint Vincent and the Grenadines": {"growth": 2.7, "gdp": 1.3}, "Saint Kitts and Nevis": {"growth": 2.2, "gdp": 1.19}, "Vanuatu": {"growth": 2.8, "gdp": 1.18}, "S\u00e3o Tom\u00e9 and Pr\u00edncipe": {"growth": 4.7, "gdp": 1.13}, "Dominica": {"growth": 3.3, "gdp": 0.79}, "Tonga": {"growth": 2.3, "gdp": 0.62}, "Micronesia, Fed. States of": {"growth": 1.4, "gdp": 0.52}, "Palau": {"growth": 3.3, "gdp": 0.36}, "Kiribati": {"growth": 3.2, "gdp": 0.34}, "Marshall Islands": {"growth": 4.1, "gdp": 0.33}, "Nauru": {"growth": 1.9, "gdp": 0.18}, "Tuvalu": {"growth": 2.6, "gdp": 0.06}};
+const DEBT_DATA = {"United States": 10400.0, "China": 8500.0, "Germany": 800.0, "India": 650.0, "Japan": 3200.0, "United Kingdom": 1100.0, "France": 950.0, "Italy": 700.0, "Russia": 200.0, "Canada": 650.0, "Brazil": 450.0, "South Sudan, Republic of": null, "Mexico": 280.0, "Australia": 600.0, "South Korea": 500.0, "Turkey": 120.0, "Indonesia": 130.0, "Netherlands": 200.0, "Saudi Arabia": 100.0, "Poland": 160.0, "Switzerland": 60.0, "Taiwan": 95.0, "Belgium": 140.0, "Ireland": 50.0, "Sweden": 180.0, "Argentina": 55.0, "Israel": 75.0, "Singapore": 90.0, "Austria": 100.0, "United Arab Emirates": 35.0, "Thailand": 85.0, "Norway": 80.0, "Philippines": 40.0, "Bangladesh": 20.0, "Vietnam": 25.0, "Malaysia": 110.0, "Denmark": 120.0, "Colombia": 35.0, "Hong Kong SAR": 60.0, "Romania": 25.0, "South Africa": 75.0, "Czech Republic": 40.0, "Pakistan": 120.0, "Egypt": 90.0, "Iran": null, "Portugal": 45.0, "Chile": 50.0, "Finland": 55.0, "Nigeria": 35.0, "Peru": 18.0, "Kazakhstan": 15.0, "Greece": 30.0, "Algeria": 10.0, "New Zealand": 35.0, "Iraq": 4.0, "Hungary": 55.0, "Qatar": 15.0, "Ukraine": 20.0, "Morocco": 22.0, "Slovak Republic": 10.0, "Kuwait": 5.0, "Uzbekistan": 4.0, "Bulgaria": 8.0, "Kenya": 8.0, "Dominican Republic": 6.0, "Ecuador": 3.0, "Guatemala": 5.0, "Puerto Rico": null, "Ethiopia": 3.0, "Ghana": 8.0, "Croatia": 8.0, "Serbia": 6.0, "Ivory Coast": 5.0, "Angola": 5.0, "Costa Rica": 10.0, "Oman": 8.0, "Luxembourg": 10.0, "Lithuania": 5.0, "Sri Lanka": 8.0, "Panama": 5.0, "Tanzania": 4.0, "Uruguay": 5.0, "Belarus": 3.0, "Congo, Dem. Rep. of the": 2.0, "Slovenia": 5.0, "Azerbaijan": 3.0, "Venezuela": null, "Turkmenistan": null, "Uganda": 3.0, "Cameroon": 2.0, "Myanmar": 5.0, "Tunisia": 6.0, "Jordan": 8.0, "Bolivia": 2.0, "Zimbabwe": 1.0, "Macao SAR": 5.0, "Latvia": 5.0, "Paraguay": 4.0, "Cambodia": 1.0, "Estonia": 2.0, "Bahrain": 5.0, "Libya": 2.0, "Nepal": 4.0, "Iceland": 4.0, "Cyprus": 5.0, "Honduras": 4.0, "Georgia": 2.0, "Senegal": 3.0, "Sudan": null, "El Salvador": 3.0, "Bosnia and Herzegovina": 1.0, "Zambia": 2.0, "Papua New Guinea": 1.0, "Albania": 2.0, "Haiti": null, "Guinea": 1.0, "Burkina Faso": 1.0, "Malta": 2.0, "Armenia": 2.0, "Mali": 1.0, "Guyana": 1.0, "Benin": 1.0, "Trinidad & Tobago": 3.0, "Mongolia": 1.0, "Mozambique": 1.0, "Niger": 1.0, "Jamaica": 5.0, "Chad": 1.0, "Gabon": 2.0, "Nicaragua": 1.0, "Kyrgyz Republic": 1.0, "Madagascar": 1.0, "Moldova": 1.0, "North Macedonia": 1.0, "Botswana": 2.0, "Tajikistan": 1.0, "Malawi": 1.0, "Lao P.D.R.": 1.0, "Yemen": null, "Congo, Republic of": 1.0, "Bahamas, The": 1.0, "Mauritius": 2.0, "Brunei Darussalam": 1.0, "Namibia": 3.0, "Rwanda": 1.0, "Equatorial Guinea": null, "Kosovo": 1.0, "Somalia": null, "Mauritania": 1.0, "Togo": 1.0, "Montenegro": 1.0, "Liechtenstein": null, "Sierra Leone": 1.0, "Burundi": null, "Maldives": 1.0, "Barbados": 1.0, "Fiji": 1.0, "Spain": 350.0, "Liberia": null, "Eswatini": null, "Djibouti": null, "Suriname": 1.0, "Andorra": null, "Aruba": null, "Bhutan": 1.0, "Central African Republic": null, "Belize": 1.0, "Cabo Verde": 1.0, "Saint Lucia": null, "Guinea-Bissau": null, "Gambia, The": null, "Lesotho": null, "Antigua and Barbuda": null, "San Marino": null, "Seychelles": null, "Timor-Leste": null, "Solomon Islands": null, "Comoros": null, "Grenada": null, "Samoa": null, "Saint Vincent and the Grenadines": null, "Saint Kitts and Nevis": null, "Vanuatu": null, "S\u00e3o Tom\u00e9 and Pr\u00edncipe": null, "Dominica": null, "Tonga": null, "Micronesia, Fed. States of": null, "Palau": null, "Kiribati": null, "Marshall Islands": null, "Nauru": null, "Tuvalu": null};
+const CENTROIDS = {"Australia": [-25, 133], "Bangladesh": [23.7, 90.4], "China": [35, 105], "Hong Kong": [22.3, 114.2], "India": [20, 77], "Indonesia": [-5, 120], "Japan": [36, 138], "Malaysia": [4, 109], "Mongolia": [46, 105], "Pakistan": [30, 70], "Philippines": [13, 122], "South Korea": [36, 128], "Sri Lanka": [7.9, 80.7], "Vietnam": [16, 108], "Taiwan": [23.7, 121], "Thailand": [15, 101], "Egypt": [26, 30], "Bulgaria": [42.7, 25.5], "Cyprus": [35, 33], "Israel": [31.5, 35], "Germany": [51, 10], "Kenya": [0, 38], "Italy": [42.8, 12.8], "Ivory Coast": [7.5, -5.5], "Nigeria": [9, 8], "Kuwait": [29.5, 47.7], "Senegal": [14, -14], "Poland": [52, 20], "Russia": [60, 100], "Saudi Arabia": [24, 45], "South Africa": [-29, 25], "Spain": [40, -4], "Tunisia": [34, 9], "Turkey": [39, 35], "UK": [54, -2], "Uganda": [1, 32], "Ukraine": [49, 32], "Uzbekistan": [41, 64], "Zimbabwe": [-20, 30], "Argentina": [-34, -64], "Bolivia": [-17, -65], "Brazil": [-10, -55], "Chile": [-30, -71], "Colombia": [4, -72], "Costa Rica": [10, -84], "Dominican Republic": [19, -70.7], "Ecuador": [-2, -77.5], "El Salvador": [13.7, -89], "Guatemala": [15.5, -90.2], "Honduras": [15, -86.5], "Mexico": [23, -102], "Nicaragua": [13, -85], "Panama": [9, -80], "Paraguay": [-23, -58], "Peru": [-10, -76], "Trinidad & Tobago": [10.7, -61.2], "Uruguay": [-33, -56], "United States": [38, -97], "Canada": [56, -96], "Greenland": [72, -40]};
+const RECOMMENDATIONS = {"Indonesia": "Moody's has zero footprint in a $1.6T economy growing at 4.9%. The local CRA market is validated \u2014 split between S&P (PEFINDO) and Fitch. A minority stake or greenfield JV mirrors the Vietnam playbook (49% in VIS Rating).", "Saudi Arabia": "Vision 2030 is driving a massive capital markets buildout \u2014 sukuk, IPOs, infrastructure financing. Both local CRAs are fully independent with no Big 3 affiliation. First-mover opportunity; gateway to the broader GCC.", "Turkey": "Three independent local CRAs, no Big 3 equity stake. Large sophisticated economy with significant domestic debt capital markets. S&P and Fitch have no local presence \u2014 mirrors the ICRA (India) and GCR (Africa) playbook.", "Philippines": "Highest GDP growth (+5.7%) among actionable targets. PhilRatings is the sole local CRA with no Big 3 affiliation \u2014 a clean acquisition target. Active bond market, large banking sector. Moody's already rates Philippine sovereign debt."};
+const NAME_MAP = {"Russian Federation": "Russia", "Turkey": "Turkey", "T\u00fcrkiye": "Turkey", "Korea, Republic of": "South Korea", "Korea, Dem. People's Rep.": "North Korea", "Viet Nam": "Vietnam", "United Kingdom of Great Britain and Northern Ireland": "UK", "United Kingdom": "UK", "Great Britain": "UK", "C\u00f4te d'Ivoire": "Ivory Coast", "Cote d'Ivoire": "Ivory Coast", "Bolivia, Plurinational State of": "Bolivia", "Bolivia (Plurinational State of)": "Bolivia", "Iran, Islamic Republic of": "Iran", "Iran (Islamic Republic of)": "Iran", "Syrian Arab Republic": "Syria", "Tanzania, United Republic of": "Tanzania", "Venezuela, Bolivarian Republic of": "Venezuela", "Venezuela (Bolivarian Republic of)": "Venezuela", "Trinidad and Tobago": "Trinidad & Tobago", "Dominican Republic": "Dominican Republic", "North Macedonia": "North Macedonia", "Macedonia, the Former Yugoslav Republic of": "North Macedonia", "Moldova, Republic of": "Moldova", "Czechia": "Czech Republic", "Hong Kong": "Hong Kong", "Macao": "Macao SAR", "Lao People's Democratic Republic": "Lao P.D.R.", "Lao PDR": "Lao P.D.R.", "Palestine, State of": "West Bank and Gaza", "United States of America": "United States", "United States": "United States", "Taiwan, Province of China": "Taiwan", "South Korea": "South Korea"};
+const GDP_NAME_MAP = {"UK": "United Kingdom", "Hong Kong": "Hong Kong SAR", "Macao SAR": "Macao SAR"};
+
+// DEBT_DATA uses same keys as GDP_DATA (UN/IMF names)
+// Need same alias map for lookups
+const DEBT_NAME_MAP = { "UK": "United Kingdom", "Hong Kong": "Hong Kong SAR" };
+
+const NA_COUNTRIES   = new Set(["United States","Canada"]);
+const GREENLAND_SET  = new Set(["Greenland"]);
+const TARGET_MARKETS = new Set(["Indonesia","Saudi Arabia","Turkey","Philippines"]);
+const ALL_COUNTRIES  = Object.keys(CRA_DATA).sort();
+
+let currentFilter = 'all', svgEl, g, projection, path, zoom, searchActiveIdx = -1;
+
+function getCN(r)      { return NAME_MAP[r] || r; }
+function getGdpKey(cn) { return GDP_NAME_MAP[cn] || cn; }
+function getDebtKey(cn){ return DEBT_NAME_MAP[cn] || GDP_NAME_MAP[cn] || cn; }
+
+function hasMoodys(cn) { const d=CRA_DATA[cn]; return d&&d.cras.some(c=>c.affiliation&&c.affiliation.toLowerCase().includes("moody")); }
+
+function getClass(cn) {
+  if (NA_COUNTRIES.has(cn))  return 'na-country';
+  if (GREENLAND_SET.has(cn)) return 'greenland-country';
+  const d=CRA_DATA[cn]; if(!d) return 'no-cra';
+  return hasMoodys(cn)?'has-cra-moodys':'has-cra-other';
+}
+
+function hasFitch(cn) { const d=CRA_DATA[cn]; return d&&d.cras.some(c=>c.affiliation&&c.affiliation.toLowerCase().includes("fitch")); }
+function hasSP(cn)    { const d=CRA_DATA[cn]; return d&&d.cras.some(c=>c.affiliation&&(c.affiliation.toLowerCase().includes("s&p")||c.affiliation.toLowerCase().includes("crisil"))); }
+
+function isVisible(cn) {
+  if (NA_COUNTRIES.has(cn)||GREENLAND_SET.has(cn)) return true;
+  const d=CRA_DATA[cn];
+  if (currentFilter==='all') return true;
+  if (currentFilter==='moodys') return !!(d&&hasMoodys(cn));
+  if (currentFilter==='fitch')  return !!(d&&hasFitch(cn));
+  if (currentFilter==='sp')     return !!(d&&hasSP(cn));
+  if (['APAC','EMEA','LATAM'].includes(currentFilter)) return !!(d&&d.region===currentFilter);
+  return true;
+}
+
+function setFilter(f) {
+  currentFilter=f;
+  ['btn-all','btn-moodys','btn-fitch','btn-sp','btn-apac','btn-emea','btn-latam'].forEach(id=>document.getElementById(id).classList.remove('active'));
+  const map={all:'btn-all',moodys:'btn-moodys',fitch:'btn-fitch',sp:'btn-sp',APAC:'btn-apac',EMEA:'btn-emea',LATAM:'btn-latam'};
+  document.getElementById(map[f]).classList.add('active');
+  g.selectAll('.country').attr('opacity',d=>isVisible(d._resolvedName||'')?1:0.08);
+}
+
+function affBadgeHtml(aff) {
+  if(!aff) return '';
+  const a=aff.toLowerCase();
+  let cls='aff-ind';
+  if(a.includes("moody")) cls='aff-moodys';
+  else if(a.includes("fitch")) cls='aff-fitch';
+  else if(a.includes("s&p")) cls='aff-sp';
+  return `<span class="aff-badge ${cls}">${aff}</span>`;
+}
+
+function fmtGDP(val) { return val>=1000?'$'+(val/1000).toFixed(1)+'T':'$'+val.toFixed(1)+'B'; }
+function fmtDebt(val) {
+  if(val===null||val===undefined) return null;
+  if(val>=1000) return '$'+(val/1000).toFixed(1)+'T';
+  if(val>=100)  return '$'+Math.round(val)+'B';
+  if(val>=10)   return '$'+val.toFixed(1)+'B';
+  return '$'+val.toFixed(1)+'B';
+}
+function gdpColor(g) { return g>=4?'#56d364':g>=2?'#79c0ff':g<0?'#f85149':'#8b949e'; }
+
+// ── Tooltip ──────────────────────────────────────────────────────────
+function showTooltip(event, cn) {
+  const d    = CRA_DATA[cn];
+  const gdp  = GDP_DATA[getGdpKey(cn)];
+  const debt = DEBT_DATA[getDebtKey(cn)];
+  const tt   = document.getElementById('tooltip');
+  const isNA = NA_COUNTRIES.has(cn), isGL = GREENLAND_SET.has(cn);
+
+  let html = `<div class="t-country">${cn}</div>`;
+
+  // Metrics block — always shown
+  const gc   = gdp ? gdpColor(gdp.growth) : null;
+  const sign = gdp && gdp.growth>=0 ? '+' : '';
+  const debtFmt = fmtDebt(debt);
+
+  html += `<div class="t-metrics">`;
+  if (gdp) {
+    html += `<div class="t-metric-row">
+      <span class="t-metric-label">GDP</span>
+      <span class="t-metric-val">${fmtGDP(gdp.gdp)}</span>
+    </div>
+    <div class="t-metric-row">
+      <span class="t-metric-label">2025 Growth</span>
+      <span class="t-metric-val" style="color:${gc}">${sign}${gdp.growth}%</span>
+    </div>`;
+  } else {
+    html += `<div class="t-no-data">GDP — Data not available</div>`;
+  }
+  if (debtFmt) {
+    html += `<div class="t-metric-row">
+      <span class="t-metric-label">2024 Debt Issuance</span>
+      <span class="t-metric-val">${debtFmt}</span>
+    </div>`;
+  } else {
+    html += `<div class="t-metric-row">
+      <span class="t-metric-label">2024 Debt Issuance</span>
+      <span class="t-no-data">N/A</span>
+    </div>`;
+  }
+  html += `</div>`;
+
+  // Early return for NA/Greenland — no CRA section
+  if (isNA || isGL) { tt.innerHTML=html; tt.style.display='block'; posTooltip(event,tt); return; }
+
+  if (TARGET_MARKETS.has(cn)) html += `<div class="t-rec-tag">&#9733; Potential New Market</div>`;
+
+  if (d) {
+    html += `<div class="t-region">${d.region} &nbsp;&middot;&nbsp; ${d.cras.length} CRA${d.cras.length>1?'s':''}</div>`;
+    d.cras.slice(0,4).forEach(c=>{html+=`<div class="t-cra">${c.name}${c.affiliation?affBadgeHtml(c.affiliation):''}</div>`;});
+    if(d.cras.length>4) html+=`<div class="t-more">+${d.cras.length-4} more &mdash; click to expand</div>`;
+  } else {
+    html+=`<div style="font-size:12px;color:#7d8590;margin-top:2px;">No local CRAs on record</div>`;
+  }
+  if(TARGET_MARKETS.has(cn)&&RECOMMENDATIONS[cn]) html+=`<div class="t-rec-text">${RECOMMENDATIONS[cn]}</div>`;
+
+  tt.innerHTML=html; tt.style.display='block'; posTooltip(event,tt);
+}
+
+function posTooltip(event, tt) {
+  let x=event.clientX+14, y=event.clientY+14;
+  if(x+320>window.innerWidth)  x=event.clientX-325;
+  if(y+280>window.innerHeight) y=event.clientY-285;
+  tt.style.left=x+'px'; tt.style.top=y+'px';
+}
+function hideTooltip() { document.getElementById('tooltip').style.display='none'; }
+
+// ── Detail Panel ──────────────────────────────────────────────────────
+function showPanel(cn) {
+  const d    = CRA_DATA[cn];
+  const gdp  = GDP_DATA[getGdpKey(cn)];
+  const debt = DEBT_DATA[getDebtKey(cn)];
+
+  document.getElementById('panel-title').textContent = cn;
+  document.getElementById('panel-region-badge').textContent = d?d.region:'';
+
+  // Recommendation block
+  const recEl = document.getElementById('panel-rec');
+  if(TARGET_MARKETS.has(cn)&&RECOMMENDATIONS[cn]) {
+    recEl.innerHTML=`<div class="panel-rec-tag">&#9733; Potential New Market &mdash; Moody's Recommendation</div><div class="panel-rec-text">${RECOMMENDATIONS[cn]}</div>`;
+    recEl.style.display='block';
+  } else { recEl.style.display='none'; }
+
+  // Metrics grid: GDP | Growth | Debt Issuance
+  const metricsEl = document.getElementById('panel-metrics');
+  const gc   = gdp?gdpColor(gdp.growth):null;
+  const sign = gdp&&gdp.growth>=0?'+':'';
+  const debtFmt = fmtDebt(debt);
+  metricsEl.innerHTML = `
+    <div class="panel-metrics-label">Key Metrics &nbsp;&middot;&nbsp; 2024–2025</div>
+    <div class="panel-metrics-grid">
+      <div class="panel-metric-card">
+        <div class="pmc-label">GDP</div>
+        <div class="pmc-val">${gdp?fmtGDP(gdp.gdp):'—'}</div>
+        <div class="pmc-sub">2025E</div>
+      </div>
+      <div class="panel-metric-card">
+        <div class="pmc-label">Growth</div>
+        <div class="pmc-val" style="color:${gc||'#8b949e'}">${gdp?sign+gdp.growth+'%':'—'}</div>
+        <div class="pmc-sub">2025E</div>
+      </div>
+      <div class="panel-metric-card">
+        <div class="pmc-label">Debt Issuance</div>
+        <div class="pmc-val">${debtFmt||'N/A'}</div>
+        <div class="pmc-sub">2024A</div>
+      </div>
+    </div>`;
+  metricsEl.style.display='block';
+
+  // CRA list
+  const body=document.getElementById('panel-body');
+  if(!d) { body.innerHTML='<div id="no-cra-msg">No local CRAs on record for this country.</div>'; }
+  else {
+    body.innerHTML=d.cras.map(c=>{
+      const rankStr=c.rank?`Rank #${c.rank}`:'';
+      let bCls='badge-ind';
+      if(c.affiliation){const a=c.affiliation.toLowerCase();if(a.includes("moody"))bCls='badge-moodys';else if(a.includes("fitch"))bCls='badge-fitch';else if(a.includes("s&p"))bCls='badge-sp';}
+      const badgeHtml=c.affiliation?`<span class="badge ${bCls}">${c.affiliation}</span>`:'';
+      const meta=[rankStr,c.commentary].filter(Boolean).join(' &middot; ');
+      return `<div class="cra-row"><div class="cra-name">${c.name}${badgeHtml}</div>${meta?`<div class="cra-meta">${meta}</div>`:''}</div>`;
+    }).join('');
+  }
+  document.getElementById('panel').classList.add('open');
+}
+
+function closePanel() { document.getElementById('panel').classList.remove('open'); g.selectAll('.country').classed('highlighted',false); }
+function zoomIn()    { svgEl.transition().duration(300).call(zoom.scaleBy,1.5); }
+function zoomOut()   { svgEl.transition().duration(300).call(zoom.scaleBy,0.67); }
+function resetZoom() { svgEl.transition().duration(400).call(zoom.transform,d3.zoomIdentity); }
+
+function zoomToCountry(cn) {
+  const coords=CENTROIDS[cn]; if(!coords||!projection) return;
+  const [lat,lng]=coords,[px,py]=projection([lng,lat]);
+  const W=960,H=500,scale=4;
+  svgEl.transition().duration(700).call(zoom.transform,d3.zoomIdentity.translate(W/2-scale*px,H/2-scale*py).scale(scale));
+  g.selectAll('.country').classed('highlighted',d=>d._resolvedName===cn);
+}
+
+function dotColor(cn){if(TARGET_MARKETS.has(cn))return'#c0614a';return hasMoodys(cn)?'#1D9E75':'#2056a8';}
+
+function renderDropdown(matches) {
+  const dd=document.getElementById('search-dropdown');
+  if(!matches.length){dd.innerHTML='<div class="search-no-results">No countries found</div>';dd.style.display='block';return;}
+  dd.innerHTML=matches.map((cn,i)=>{
+    const region=CRA_DATA[cn]?CRA_DATA[cn].region:'';
+    const dotStyle=TARGET_MARKETS.has(cn)?`border:2px solid #c0614a;background:transparent;`:`background:${dotColor(cn)};`;
+    return `<div class="search-item" data-idx="${i}" onmousedown="selectCountry('${cn.replace(/'/g,"\'")}')"><span class="si-dot" style="${dotStyle}"></span>${cn}${region?`<span class="si-region">${region}</span>`:''}</div>`;
+  }).join('');
+  searchActiveIdx=-1; dd.style.display='block';
+}
+
+function hideDropdown(){document.getElementById('search-dropdown').style.display='none';searchActiveIdx=-1;}
+
+function selectCountry(cn) {
+  document.getElementById('search-input').value=cn;
+  document.getElementById('search-clear').style.display='block';
+  hideDropdown(); showPanel(cn); zoomToCountry(cn);
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value='';
+  document.getElementById('search-clear').style.display='none';
+  hideDropdown(); g.selectAll('.country').classed('highlighted',false);
+}
+
+document.addEventListener('DOMContentLoaded',()=>{
+  const input=document.getElementById('search-input');
+  input.addEventListener('input',()=>{
+    const val=input.value.trim().toLowerCase();
+    document.getElementById('search-clear').style.display=val?'block':'none';
+    if(!val){hideDropdown();return;}
+    const matches=ALL_COUNTRIES.filter(cn=>cn.toLowerCase().includes(val))
+      .sort((a,b)=>{const at=TARGET_MARKETS.has(a)?0:1,bt=TARGET_MARKETS.has(b)?0:1;return at-bt||a.localeCompare(b);})
+      .slice(0,10);
+    renderDropdown(matches);
+  });
+  input.addEventListener('keydown',e=>{
+    const dd=document.getElementById('search-dropdown');
+    const items=dd.querySelectorAll('.search-item');
+    if(!items.length) return;
+    if(e.key==='ArrowDown'){e.preventDefault();searchActiveIdx=Math.min(searchActiveIdx+1,items.length-1);}
+    else if(e.key==='ArrowUp'){e.preventDefault();searchActiveIdx=Math.max(searchActiveIdx-1,0);}
+    else if(e.key==='Enter'){if(searchActiveIdx>=0)items[searchActiveIdx].dispatchEvent(new MouseEvent('mousedown'));else if(items.length===1)items[0].dispatchEvent(new MouseEvent('mousedown'));return;}
+    else if(e.key==='Escape'){hideDropdown();return;}
+    else return;
+    items.forEach((el,i)=>el.classList.toggle('active',i===searchActiveIdx));
+    if(searchActiveIdx>=0)items[searchActiveIdx].scrollIntoView({block:'nearest'});
+  });
+  input.addEventListener('focus',()=>{
+    const val=input.value.trim().toLowerCase();
+    if(val)renderDropdown(ALL_COUNTRIES.filter(cn=>cn.toLowerCase().includes(val)).slice(0,10));
+  });
+  document.addEventListener('click',e=>{if(!document.getElementById('search-wrap').contains(e.target))hideDropdown();});
+});
+
+fetch('https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json')
+  .then(r=>r.json())
+  .then(world=>{
+    const countries=topojson.feature(world,world.objects.countries);
+    svgEl=d3.select('#world');
+    const W=960,H=500;
+    projection=d3.geoNaturalEarth1().scale(153).translate([W/2,H/2]);
+    path=d3.geoPath().projection(projection);
+    svgEl.attr('viewBox',`0 0 ${W} ${H}`);
+    g=svgEl.append('g');
+    zoom=d3.zoom().scaleExtent([1,10]).on('zoom',e=>g.attr('transform',e.transform));
+    svgEl.call(zoom);
+
+    fetch('https://cdn.jsdelivr.net/gh/lukes/ISO-3166-Countries-with-Regional-Codes@master/all/all.json')
+      .then(r=>r.json()).catch(()=>[])
+      .then(namesData=>{
+        const idToName={};
+        if(Array.isArray(namesData))namesData.forEach(n=>{if(n['country-code']&&n.name)idToName[parseInt(n['country-code'])]=getCN(n.name);});
+
+        g.selectAll('.country')
+          .data(countries.features)
+          .enter().append('path')
+          .each(function(d){d._resolvedName=idToName[+d.id]||getCN((d.properties&&d.properties.name)||'');})
+          .attr('class',d=>'country '+getClass(d._resolvedName)+(TARGET_MARKETS.has(d._resolvedName)?' target-market':''))
+          .attr('d',path)
+          .on('mousemove',function(event,d){showTooltip(event,d._resolvedName);})
+          .on('mouseleave',hideTooltip)
+          .on('click',function(event,d){
+            const cn=d._resolvedName;
+            if(NA_COUNTRIES.has(cn)||GREENLAND_SET.has(cn))return;
+            showPanel(cn);zoomToCountry(cn);hideTooltip();
+          });
+
+        g.append('path')
+          .datum(topojson.mesh(world,world.objects.countries,(a,b)=>a!==b))
+          .attr('fill','none').attr('stroke','#21262d').attr('stroke-width','0.5px').attr('d',path);
+      });
+  });
+</script>
+</body>
+</html>
